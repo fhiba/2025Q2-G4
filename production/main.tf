@@ -2,7 +2,7 @@
 data "aws_iam_role" "academy_role" {
   name = var.academy_role
 }
-
+data "aws_region" "current" {}
 locals {
   common_tags = {
     Environment = "production"
@@ -38,9 +38,9 @@ resource "aws_cognito_user_pool_client" "app_client" {
 
   # Necesario para el flow de autenticación de una SPA
   explicit_auth_flows = ["ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"]
-  
+
   # Si no usas un "client secret" (común para SPAs)
-  generate_secret = false 
+  generate_secret = false
 }
 
 #lambdas
@@ -48,7 +48,7 @@ module "lambdas" {
   for_each = var.lambda_functions
 
   source  = "terraform-aws-modules/lambda/aws"
-  version = "~> 7.2"
+  version = "~> 8.1"
 
   function_name = each.key
   handler       = each.value.handler
@@ -61,19 +61,17 @@ module "lambdas" {
 }
 module "http_api" {
   source  = "terraform-aws-modules/apigateway-v2/aws"
-  version = "~> 5.0"
+  version = "~> 5.4"
 
   name          = "factutable-api"
   protocol_type = "HTTP"
 
   cors_configuration = {
-    allow_origins = ["*"]                 # o el origin de tu SPA
-    allow_methods = ["GET","POST","OPTIONS", "PUT"]
-    allow_headers = ["authorization","content-type"]
+    allow_origins = ["*"] # o el origin de tu SPA
+    allow_methods = ["GET", "POST", "OPTIONS", "PUT"]
+    allow_headers = ["authorization", "content-type"]
   }
-  disable_execute_api_endpoint = true
-
-  # Authorizer Cognito (JWT)
+    # Authorizer Cognito (JWT)
   authorizers = {
     cognito = {
       authorizer_type  = "JWT"
@@ -81,12 +79,12 @@ module "http_api" {
       name             = "cognito-jwt"
       jwt_configuration = {
         audience = [aws_cognito_user_pool_client.app_client.id]
-        issuer   = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.user_pool.id}"
+        issuer   = "https://cognito-idp.${data.aws_region.current.region}.amazonaws.com/${aws_cognito_user_pool.user_pool.id}"
       }
     }
   }
-create_domain_name      = false
-  tags = local.common_tags
+  create_domain_name = false
+  tags               = local.common_tags
 }
 
 resource "aws_apigatewayv2_integration" "presign" {
@@ -150,20 +148,20 @@ resource "aws_apigatewayv2_route" "get_invoice" {
 }
 
 
-resource "aws_apigatewayv2_stage" "default" {
-  api_id = module.http_api.api_id
-  
-  name   = "$default" 
-  
-  auto_deploy = true
-
-  depends_on = [
-    aws_apigatewayv2_route.presign,
-    aws_apigatewayv2_route.report,
-    aws_apigatewayv2_route.update_invoice,
-    aws_apigatewayv2_route.get_invoice
-  ]
-}
+# resource "aws_apigatewayv2_stage" "default" {
+#   api_id = module.http_api.api_id
+#
+#   name = "$default"
+#
+#   auto_deploy = true
+#
+#   depends_on = [
+#     aws_apigatewayv2_route.presign,
+#     aws_apigatewayv2_route.report,
+#     aws_apigatewayv2_route.update_invoice,
+#     aws_apigatewayv2_route.get_invoice
+#   ]
+# }
 # Permisos para que API GW invoque tus Lambdas
 resource "aws_lambda_permission" "apigw_invoke" {
   for_each = {
@@ -176,29 +174,29 @@ resource "aws_lambda_permission" "apigw_invoke" {
   action        = "lambda:InvokeFunction"
   function_name = each.value
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${module.http_api.api_execution_arn}/*/*"
+  source_arn    = "${module.http_api.stage_execution_arn}/*/*"
 }
 
 module "ddb_invoice_jobs" {
   source  = "terraform-aws-modules/dynamodb-table/aws"
-  version = "~> 4.0"
+  version = "~> 5.1"
 
   name      = "InvoiceJobs"
   hash_key  = "PK"
   range_key = "SK"
 
   attributes = [
-    { name = "PK",        type = "S" },
-    { name = "SK",        type = "S" },
-    { name = "userId",    type = "S" },
+    { name = "PK", type = "S" },
+    { name = "SK", type = "S" },
+    { name = "userId", type = "S" },
     { name = "createdAt", type = "N" },
-    { name = "groupKey",  type = "S" }
+    { name = "groupKey", type = "S" }
   ]
 
   billing_mode = "PAY_PER_REQUEST"
 
   global_secondary_indexes = [
-    { name = "GSI_Date",  hash_key = "userId",   range_key = "createdAt", projection_type = "ALL" },
+    { name = "GSI_Date", hash_key = "userId", range_key = "createdAt", projection_type = "ALL" },
     { name = "GSI_Group", hash_key = "groupKey", range_key = "createdAt", projection_type = "ALL" }
   ]
 
@@ -207,27 +205,27 @@ module "ddb_invoice_jobs" {
 
 # 1. Permiso para que S3 pueda invocar la Lambda
 resource "aws_lambda_permission" "s3_invoke_processor" {
-  statement_id  = "AllowS3Invoke"
-  action        = "lambda:InvokeFunction"
-  
+  statement_id = "AllowS3Invoke"
+  action       = "lambda:InvokeFunction"
+
   # Apunta a la nueva lambda
-  function_name = module.lambdas["invoice-processor"].lambda_function_arn 
-  
-  principal     = "s3.amazonaws.com"
-  
+  function_name = module.lambdas["invoice-processor"].lambda_function_arn
+
+  principal = "s3.amazonaws.com"
+
   # Apunta al bucket de uploads
-  source_arn    = module.s3_buckets["facturas"].bucket_arn
+  source_arn = module.s3_buckets["facturas"].bucket_arn
 }
 
 # 2. La configuración del "Trigger" (Notificación) en el bucket S3
 resource "aws_s3_bucket_notification" "uploads_trigger" {
-  
+
   bucket = module.s3_buckets["facturas"].bucket_name
 
   lambda_function {
     lambda_function_arn = module.lambdas["invoice-processor"].lambda_function_arn
-    
-    events              = ["s3:ObjectCreated:*"] 
+
+    events = ["s3:ObjectCreated:*"]
   }
 
   depends_on = [
