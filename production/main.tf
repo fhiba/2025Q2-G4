@@ -68,9 +68,10 @@ module "http_api" {
 
   cors_configuration = {
     allow_origins = ["*"]                 # o el origin de tu SPA
-    allow_methods = ["GET","POST","OPTIONS"]
+    allow_methods = ["GET","POST","OPTIONS", "PUT"]
     allow_headers = ["authorization","content-type"]
   }
+  disable_execute_api_endpoint = true
 
   # Authorizer Cognito (JWT)
   authorizers = {
@@ -84,67 +85,98 @@ module "http_api" {
       }
     }
   }
-
-  integrations = {
-    presign = {
-      integration_type       = "AWS_PROXY"
-      integration_uri        = module.lambdas["presigned-url-generator"].lambda_function_arn
-      payload_format_version = "2.0"
-    }
-    report = {
-      integration_type       = "AWS_PROXY"
-      integration_uri        = module.lambdas["report-generator"].lambda_function_arn
-      payload_format_version = "2.0"
-    }
-    update_invoice = {
-      integration_type       = "AWS_PROXY"
-      integration_uri        = module.lambdas["invoice-data-updater"].lambda_function_arn
-      payload_format_version = "2.0"
-    }
-  }
-
-  routes = [
-    {
-      route_key          = "POST /uploads/presign"
-      integration_key    = "presign"
-      authorization_type = "JWT"
-      authorizer_key     = "cognito"
-    },
-    {
-      route_key          = "GET /download"
-      integration_key    = "report"
-      authorization_type = "JWT"
-      authorizer_key     = "cognito"
-    },
-    {
-      route_key          = "POST /invoices/{id}"
-      integration_key    = "update_invoice"
-      authorization_type = "JWT"
-      authorizer_key     = "cognito"
-    }
-  ]
-
-  # Stage por defecto y auto-deploy (no requiere CloudWatch)
-  default_stage_access_log_destination_arn = null
-  default_stage_access_log_format          = null
-  create_default_stage                     = true
-  default_stage_auto_deploy                = true
-
+create_domain_name      = false
   tags = local.common_tags
 }
 
+resource "aws_apigatewayv2_integration" "presign" {
+  api_id                 = module.http_api.api_id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = module.lambdas["presigned-url-generator"].lambda_function_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_integration" "report" {
+  api_id                 = module.http_api.api_id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = module.lambdas["report-generator"].lambda_function_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_integration" "update_invoice" {
+  api_id                 = module.http_api.api_id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = module.lambdas["invoice-data-updater"].lambda_function_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_integration" "get_invoice" {
+  api_id                 = module.http_api.api_id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = module.lambdas["invoice-data-getter"].lambda_function_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "presign" {
+  api_id             = module.http_api.api_id
+  route_key          = "POST /uploads/presign"
+  target             = "integrations/${aws_apigatewayv2_integration.presign.id}"
+  authorization_type = "JWT"
+  authorizer_id      = module.http_api.authorizers["cognito"].id
+}
+
+resource "aws_apigatewayv2_route" "report" {
+  api_id             = module.http_api.api_id
+  route_key          = "GET /download"
+  target             = "integrations/${aws_apigatewayv2_integration.report.id}"
+  authorization_type = "JWT"
+  authorizer_id      = module.http_api.authorizers["cognito"].id
+}
+
+resource "aws_apigatewayv2_route" "update_invoice" {
+  api_id             = module.http_api.api_id
+  route_key          = "PUT /invoices/{id}"
+  target             = "integrations/${aws_apigatewayv2_integration.update_invoice.id}"
+  authorization_type = "JWT"
+  authorizer_id      = module.http_api.authorizers["cognito"].id
+}
+
+resource "aws_apigatewayv2_route" "get_invoice" {
+  api_id             = module.http_api.api_id
+  route_key          = "GET /invoices"
+  target             = "integrations/${aws_apigatewayv2_integration.get_invoice.id}"
+  authorization_type = "JWT"
+  authorizer_id      = module.http_api.authorizers["cognito"].id
+}
+
+
+resource "aws_apigatewayv2_stage" "default" {
+  api_id = module.http_api.api_id
+  
+  name   = "$default" 
+  
+  auto_deploy = true
+
+  depends_on = [
+    aws_apigatewayv2_route.presign,
+    aws_apigatewayv2_route.report,
+    aws_apigatewayv2_route.update_invoice,
+    aws_apigatewayv2_route.get_invoice
+  ]
+}
 # Permisos para que API GW invoque tus Lambdas
 resource "aws_lambda_permission" "apigw_invoke" {
   for_each = {
     presign = module.lambdas["presigned-url-generator"].lambda_function_name
     report  = module.lambdas["report-generator"].lambda_function_name
     update  = module.lambdas["invoice-data-updater"].lambda_function_name
+    getter  = module.lambdas["invoice-data-getter"].lambda_function_name
   }
   statement_id  = "AllowInvoke-${each.key}"
   action        = "lambda:InvokeFunction"
   function_name = each.value
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${module.http_api.execution_arn}/*/*"
+  source_arn    = "${module.http_api.api_execution_arn}/*/*"
 }
 
 module "ddb_invoice_jobs" {
@@ -173,4 +205,32 @@ module "ddb_invoice_jobs" {
   tags = local.common_tags
 }
 
+# 1. Permiso para que S3 pueda invocar la Lambda
+resource "aws_lambda_permission" "s3_invoke_processor" {
+  statement_id  = "AllowS3Invoke"
+  action        = "lambda:InvokeFunction"
+  
+  # Apunta a la nueva lambda
+  function_name = module.lambdas["invoice-processor"].lambda_function_arn 
+  
+  principal     = "s3.amazonaws.com"
+  
+  # Apunta al bucket de uploads
+  source_arn    = module.s3_buckets["facturas"].bucket_arn
+}
 
+# 2. La configuración del "Trigger" (Notificación) en el bucket S3
+resource "aws_s3_bucket_notification" "uploads_trigger" {
+  
+  bucket = module.s3_buckets["facturas"].bucket_name
+
+  lambda_function {
+    lambda_function_arn = module.lambdas["invoice-processor"].lambda_function_arn
+    
+    events              = ["s3:ObjectCreated:*"] 
+  }
+
+  depends_on = [
+    aws_lambda_permission.s3_invoke_processor
+  ]
+}
