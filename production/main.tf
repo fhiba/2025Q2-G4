@@ -232,3 +232,116 @@ resource "aws_s3_bucket_notification" "uploads_trigger" {
     aws_lambda_permission.s3_invoke_processor
   ]
 }
+
+# ===================================================================
+# CloudWatch para Lambda y API Gateway
+# ===================================================================
+
+# (A) Log group para la(s) Lambda: controla retención y evita race al crear.
+#    Ajustá 'retention_in_days' si querés otro valor.
+resource "aws_cloudwatch_log_group" "invoice_processor" {
+  count = var.manage_lambda_log_group ? 1 : 0
+  name              = "/aws/lambda/${module.lambdas["invoice-processor"].lambda_function_name}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
+
+# Data source: fetch the Academy/Learner Lab role to attach basic Lambda logging
+data "aws_iam_role" "academy" {
+  name = var.academy_role
+}
+
+# (B) Permisos mínimos para que la Lambda escriba en CloudWatch Logs.
+#     Si tu rol de ejecución ya tiene AWSLambdaBasicExecutionRole, podés omitir esto.
+#     Si tus Lambdas usan un rol propio distinto, reemplazá 'aws_iam_role.lambda_exec.name'.
+resource "aws_iam_role_policy_attachment" "lambda_basic_logs" {
+  count = var.manage_iam ? 1 : 0
+  role       = data.aws_iam_role.academy.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# (C) Habilitar CloudWatch Logs para API Gateway (REST).
+#     Esto configura la cuenta de API Gateway con un rol que le permite publicar logs.
+data "aws_iam_policy_document" "apigw_assume" {
+  statement {
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["apigateway.amazonaws.com"]
+    }
+    actions = ["sts:AssumeRole"]
+  }
+}
+
+resource "aws_iam_role" "apigw_cw" {
+  count = var.manage_iam ? 1 : 0
+  name               = "apigw-cloudwatch-role"
+  assume_role_policy = data.aws_iam_policy_document.apigw_assume.json
+  tags               = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "apigw_push" {
+  count = var.manage_iam ? 1 : 0
+  role       = aws_iam_role.apigw_cw[0].name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+}
+
+resource "aws_api_gateway_account" "this" {
+  count = var.manage_iam ? 1 : 0
+  cloudwatch_role_arn = aws_iam_role.apigw_cw[0].arn
+}
+
+# (D) Access logs y metrics en un Stage de API Gateway (REST).
+#     Si ya definiste tu Stage, agregá/mergeá estos campos.
+#     Si no, dejá este bloque como referencia y reemplazá 'aws_api_gateway_rest_api.main.id'.
+resource "aws_cloudwatch_log_group" "apigw_access" {
+  name              = "/aws/apigw/factutable"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
+# Ejemplo de Stage (si ya tenés uno, sólo sumá 'access_log_settings' y 'method_settings'):
+# resource "aws_api_gateway_stage" "prod" {
+#   rest_api_id = aws_api_gateway_rest_api.main.id
+#   stage_name  = "prod"
+# 
+#   access_log_settings {
+#     destination_arn = aws_cloudwatch_log_group.apigw_access.arn
+#     # formato recomendado: incluye requestId, status, latencia, etc.
+#     format = jsonencode({
+#       requestId   = "$context.requestId"
+#       ip          = "$context.identity.sourceIp"
+#       caller      = "$context.identity.caller"
+#       user        = "$context.identity.user"
+#       requestTime = "$context.requestTime"
+#       httpMethod  = "$context.httpMethod"
+#       resourcePath= "$context.resourcePath"
+#       status      = "$context.status"
+#       protocol    = "$context.protocol"
+#       responseLen = "$context.responseLength"
+#       integrationError = "$context.integration.error"
+#     })
+#   }
+# 
+#   method_settings {
+#     resource_path = "/*"
+#     http_method   = "*"
+#     logging_level = "INFO"
+#     metrics_enabled = true
+#   }
+# 
+#   tags = local.common_tags
+# }
+
+# (E) Para HTTP API (v2), usar aws_apigatewayv2_stage con access_log_settings análogo:
+# resource "aws_apigatewayv2_stage" "prod" {
+#   api_id     = aws_apigatewayv2_api.main.id
+#   name       = "$default"
+#   auto_deploy = true
+#   access_log_settings {
+#     destination_arn = aws_cloudwatch_log_group.apigw_access.arn
+#     format = jsonencode({ requestId = "$context.requestId", status = "$context.status" })
+#   }
+#   tags = local.common_tags
+# }

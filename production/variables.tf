@@ -30,3 +30,17 @@ variable "region" {
   type        = string
   default     = "us-east-1"
 }
+
+
+variable "manage_iam" {
+  description = "Whether Terraform should create/modify IAM roles/policies (Learner Lab often forbids this)."
+  type        = bool
+  default     = false
+}
+
+
+variable "manage_lambda_log_group" {
+  description = "Whether Terraform should create the Lambda log group explicitly. If false, let Lambda create it automatically."
+  type        = bool
+  default     = false
+}
