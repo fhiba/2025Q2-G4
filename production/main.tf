@@ -56,6 +56,25 @@ module "lambdas" {
   source_path   = each.value.source_path
   tags          = local.common_tags
 
+  environment_variables = merge(
+    # Default para todas
+    {
+      UPLOAD_BUCKET = module.s3_buckets["facturas"].bucket_name
+    },
+    # Extra solo si es la lambda "database-writer"
+    each.key == "database-writer" ? {
+      TABLE_NAME = module.ddb_invoice_jobs.dynamodb_table_id
+    } : {},
+    each.key == "invoice-data-getter" ? {
+      TABLE_NAME = module.ddb_invoice_jobs.dynamodb_table_id
+      INDEX_NAME = "GSI_Date" # o el índice que uses realmente
+    } : {},
+
+
+
+  )
+
+
   create_role = false
   lambda_role = data.aws_iam_role.academy_role.arn
 }
