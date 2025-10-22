@@ -9,11 +9,7 @@ BUCKET = os.environ["UPLOAD_BUCKET"]
 
 def handler(event, context):
     file_id = str(uuid.uuid4()) + ".pdf"
-    presigned_url = s3.generate_presigned_url(
-        "put_object",
-        Params={"Bucket": BUCKET, "Key": file_id, "ContentType": "application/pdf"},
-        ExpiresIn=3600
-    )
+    presigned_url = s3.generate_presigned_post(Bucket=BUCKET, Key=f"{file_id}", ExpiresIn=3000)
     return {
         "statusCode": 200,
         "body": json.dumps({

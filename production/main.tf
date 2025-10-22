@@ -2,6 +2,8 @@
 data "aws_iam_role" "academy_role" {
   name = var.academy_role
 }
+data "aws_caller_identity" "current" {}
+
 data "aws_region" "current" {}
 locals {
   common_tags = {
@@ -73,6 +75,9 @@ module "lambdas" {
   create_role = false
   lambda_role = data.aws_iam_role.academy_role.arn
 }
+
+# Nota: Los permisos S3 deben agregarse manualmente al rol LabRole en la consola de AWS
+# ya que el entorno de laboratorio no permite crear/modificar roles IAM
 
 module "http_api" {
   source  = "terraform-aws-modules/apigateway-v2/aws"

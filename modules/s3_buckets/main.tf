@@ -11,7 +11,13 @@ bucket = local.final_bucket_name
     { "Name" = var.bucket_name },
     var.tags
   )
-
+    cors_rule {
+      allowed_headers = ["*"]
+      allowed_methods = ["GET", "PUT", "POST"]
+      allowed_origins = ["*"]
+      expose_headers  = []
+      max_age_seconds = 3000
+    }
     lifecycle {
     precondition {
       condition     = !(var.enable_versioning && var.enable_website_hosting)
