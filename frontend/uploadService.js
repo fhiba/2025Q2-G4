@@ -9,7 +9,7 @@ export class UploadService {
   // Get presigned URL for file upload
   async getPresignedUrl(fileName, fileType) {
     try {
-      const response = await fetch(`${this.apiEndpoint}/presigned-url`, {
+      const response = await fetch(`${this.apiEndpoint}/uploads/presign`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -33,15 +33,22 @@ export class UploadService {
     }
   }
 
-  // Upload file to S3 using presigned URL
-  async uploadFile(file, presignedUrl) {
+  // Upload file to S3 using presigned POST
+  async uploadFile(file, presignedData) {
     try {
-      const response = await fetch(presignedUrl, {
-        method: 'PUT',
-        body: file,
-        headers: {
-          'Content-Type': file.type
-        }
+      const formData = new FormData();
+      
+      // Add the presigned fields
+      Object.keys(presignedData.fields).forEach(key => {
+        formData.append(key, presignedData.fields[key]);
+      });
+      
+      // Add the file last
+      formData.append('file', file);
+
+      const response = await fetch(presignedData.url, {
+        method: 'POST',
+        body: formData
       });
 
       if (!response.ok) {
@@ -57,28 +64,12 @@ export class UploadService {
 
   // Process uploaded file (trigger processing lambda)
   async processFile(fileName) {
-    try {
-      const response = await fetch(`${this.apiEndpoint}/process`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...authManager.getAuthHeader()
-        },
-        body: JSON.stringify({
-          fileName: fileName
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Processing failed with status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      return result;
-    } catch (error) {
-      console.error('File processing failed:', error);
-      throw error;
-    }
+    // El procesamiento se hace automáticamente cuando se sube el archivo a S3
+    // No necesitamos llamar a un endpoint separado
+    return {
+      message: "File processing started automatically",
+      fileName: fileName
+    };
   }
 
   // Complete upload workflow: get presigned URL, upload file, and process
@@ -88,14 +79,14 @@ export class UploadService {
       const presignedData = await this.getPresignedUrl(file.name, file.type);
       
       // Step 2: Upload file to S3
-      await this.uploadFile(file, presignedData.uploadUrl);
+      await this.uploadFile(file, presignedData.upload_url);
       
       // Step 3: Process the file
-      const processResult = await this.processFile(presignedData.fileName);
+      const processResult = await this.processFile(presignedData.file_key);
       
       return {
         success: true,
-        fileName: presignedData.fileName,
+        fileName: presignedData.file_key,
         processResult: processResult
       };
     } catch (error) {
