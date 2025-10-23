@@ -184,8 +184,12 @@ en el config.ts del src modificar todo menos el COGNITO.domain con lo que corres
   }
 };
    ```
-### Paso 5: levantar el front end de manera local
+### Paso 5: Buildear el proyecto
 
 ```bash
-  npm run dev
+  npm run build
 ```
+### Paso 6: Subir el contenido de dist al bucket
+<img width="1444" height="231" alt="image" src="https://github.com/user-attachments/assets/a58594aa-fbcb-4d41-92b6-756b1bd7d1a5" />
+Se deberia ver asi como en la foto.
+
