@@ -56,7 +56,7 @@ resource "aws_cognito_user_pool_client" "app_client" {
   # Agregar la URL de callback (la URL a la que Cognito redirigirá después de la autenticación)
   callback_urls = [
     "${module.http_api.api_endpoint}/prod/auth/callback",
-    "http://localhost"
+    "http://localhost:3000"
   ]
 
 }
@@ -99,6 +99,10 @@ environment_variables = merge(
       COGNITO_DOMAIN       = aws_cognito_user_pool_domain.user_pool_domain.domain
       COGNITO_USER_POOL_ID = aws_cognito_user_pool.user_pool.id
     },
+    # SPA URL for cognito-post-auth lambda
+    each.key == "cognito-post-auth" ? {
+      SPA_URL = "http://localhost:3000"
+    } : {},
     # Extra solo si es la lambda "database-writer"
     each.key == "database-writer" ? {
       TABLE_NAME = module.ddb_invoice_jobs.dynamodb_table_id

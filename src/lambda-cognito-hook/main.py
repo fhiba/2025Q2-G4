@@ -6,6 +6,7 @@ import os
 # Constantes de Cognito extraídas de las variables de entorno
 CLIENT_ID = os.environ['COGNITO_CLIENT_ID']
 REDIRECT_URI = os.environ['COGNITO_REDIRECT_URI']
+SPA_URL = os.environ['SPA_URL']
 COGNITO_TOKEN_URL = "https://"  + os.environ['COGNITO_DOMAIN'] + ".auth.us-east-1.amazoncognito.com/oauth2/token"
 
 def handler(event, context):
@@ -111,7 +112,7 @@ def handler(event, context):
 
         # Retornar JSON con los tokens (no redirección)
         # Redirigir al frontend con los tokens en la URL
-        redirect_url = f"http://localhost:3000?access_token={access_token}&id_token={id_token}&refresh_token={refresh_token}"
+        redirect_url = f"{SPA_URL}?access_token={access_token}&id_token={id_token}&refresh_token={refresh_token}"
 
         return {
             'statusCode': 302,  # Redirección HTTP
