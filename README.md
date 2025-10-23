@@ -162,10 +162,30 @@ terraform plan
 terraform apply
 ```
 
-### Paso 7: Configuración Post-Despliegue
+### Paso 4: Ir al factu-front y actualizar los siguientes archivos:
 
-1. **Configurar el frontend**:
-   ```bash
-   # Subir archivos del frontend al bucket SPA
-   aws s3 sync ../frontend/ s3://<bucket-spa-name>/
+en el config.ts del src modificar todo menos el COGNITO.domain con lo que corresponda, estos datos son accesibles desde la consola de aws
+
+
+   ```typescript
+  export const CONFIG = {
+  // API Gateway endpoint
+  API_GATEWAY_ENDPOINT: "https://f5o8rmaoa4.execute-api.us-east-1.amazonaws.com/prod",
+  
+  // Cognito callback endpoint (where Cognito redirects after login)
+  COGNITO_CALLBACK_ENDPOINT: "https://f5o8rmaoa4.execute-api.us-east-1.amazonaws.com/prod/auth/callback",
+  
+  // Cognito configuration
+  COGNITO: {
+    region: "us-east-1",
+    userPoolId: "us-east-1_5M9YXKeOe",
+    userPoolWebClientId: "7nilk1q7pj4k2adn54ocjhkg0u",
+    domain: "factutable-auth.auth.us-east-1.amazoncognito.com"
+  }
+};
    ```
+### Paso 5: levantar el front end de manera local
+
+```bash
+  npm run dev
+```
