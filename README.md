@@ -44,7 +44,7 @@ FactuTable es una aplicación serverless que permite:
 - **DynamoDB**: Almacenamiento de datos
 - **CloudWatch**: Logging y monitoreo
 
-## Funciones Lambda
+## Funciones Lambda Implementadas
 
 ### 1. `cognito-post-auth`
 - **Trigger**: Cognito Post Authentication Hook
@@ -54,6 +54,8 @@ FactuTable es una aplicación serverless que permite:
 - **Trigger**: API Gateway (POST /uploads/presign)
 - **Propósito**: Genera URLs pre-firmadas para carga de archivos
 - **Autenticación**: JWT (Cognito)
+
+## Funciones Lambda a Implementar (NO FUNCIONALES)
 
 ### 3. `invoice-processor`
 - **Trigger**: S3 Object Created Event
