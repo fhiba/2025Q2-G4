@@ -87,10 +87,17 @@ module "lambdas" {
   source_path   = each.value.source_path
   tags          = local.common_tags
 
-  environment_variables = merge(
+environment_variables = merge(
     # Default para todas
     {
       UPLOAD_BUCKET = module.s3_buckets["facturas"].bucket_name
+    },
+    # Cognito variables for all lambdas
+    {
+      COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.app_client.id
+      COGNITO_REDIRECT_URI = "${module.http_api.api_endpoint}/prod/auth/callback"
+      COGNITO_DOMAIN       = aws_cognito_user_pool_domain.user_pool_domain.domain
+      COGNITO_USER_POOL_ID = aws_cognito_user_pool.user_pool.id
     },
     # Extra solo si es la lambda "database-writer"
     each.key == "database-writer" ? {
@@ -99,22 +106,13 @@ module "lambdas" {
     each.key == "invoice-data-getter" ? {
       TABLE_NAME = module.ddb_invoice_jobs.dynamodb_table_id
       INDEX_NAME = "GSI_Date" # o el índice que uses realmente
-    } : {},
-
-
-
-  )
-
+    } : {}
+)
 
   create_role = false
   lambda_role = data.aws_iam_role.academy_role.arn
 
-  environment_variables = {
-    COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.app_client.id
-    COGNITO_REDIRECT_URI = "${module.http_api.api_endpoint}/prod/auth/callback"
-    COGNITO_DOMAIN       = aws_cognito_user_pool_domain.user_pool_domain.domain
-    COGNITO_USER_POOL_ID = aws_cognito_user_pool.user_pool.id
-  }
+
   layers = [aws_lambda_layer_version.python_dependencies.arn]
 }
 
