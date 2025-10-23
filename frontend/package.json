@@ -1,5 +1,5 @@
 {
-  "name": "simple-file-upload",
+  "name": "factutable-frontend",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -7,6 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
+  },
+  "dependencies": {
+    "aws-amplify": "^6.0.0",
+    "aws-sdk": "^2.1500.0"
   },
   "devDependencies": {
     "vite": "^5.0.0"

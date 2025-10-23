@@ -31,20 +31,54 @@ module "s3_buckets" {
 resource "aws_cognito_user_pool" "user_pool" {
   name = "factutable-user-pool"
   tags = local.common_tags
+  username_attributes      = ["email"]              # o ["email","phone_number"]
+  auto_verified_attributes = ["email"]              # y/o "phone_number"
+
+  admin_create_user_config {
+    allow_admin_create_user_only = false
+  }
+
+  email_configuration {
+    email_sending_account = "COGNITO_DEFAULT"       # evita configurar SES para probar
+  }
 }
 
 resource "aws_cognito_user_pool_client" "app_client" {
-  name         = "factutable-app-client"
-  user_pool_id = aws_cognito_user_pool.user_pool.id
+  name                = "factutable-app-client"
+  user_pool_id        = aws_cognito_user_pool.user_pool.id
   explicit_auth_flows = ["ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"]
-  generate_secret = false
+  generate_secret     = false
+
+  allowed_oauth_flows_user_pool_client = true
+  supported_identity_providers = ["COGNITO"]
+  allowed_oauth_flows= ["code"]  # Esto habilita el Authorization Code Flow
+  allowed_oauth_scopes = ["openid", "email", "profile", "phone"]  # Scopes requeridos
+  # Agregar la URL de callback (la URL a la que Cognito redirigirá después de la autenticación)
+  callback_urls = [
+    "${module.http_api.api_endpoint}/prod/auth/callback",
+    "http://localhost"
+  ]
+
+}
+
+
+resource "aws_cognito_user_pool_domain" "user_pool_domain" {
+  domain       = "factutable-auth" # El nombre de tu dominio
+  user_pool_id = aws_cognito_user_pool.user_pool.id
+
+}
+
+resource "aws_lambda_layer_version" "python_dependencies" {
+  layer_name = "python-dependencies"
+  filename   = "../src/lambda-layer.zip"  # Ruta del archivo ZIP que creaste
+  compatible_runtimes = ["python3.13"]  # Ajusta según el runtime que uses
 }
 
 # Lambdas
 module "lambdas" {
   for_each = var.lambda_functions
 
-  source  = "terraform-aws-modules/lambda/aws"
+ source  = "terraform-aws-modules/lambda/aws"
   version = "~> 8.1"
 
   function_name = each.key
@@ -74,6 +108,14 @@ module "lambdas" {
 
   create_role = false
   lambda_role = data.aws_iam_role.academy_role.arn
+
+  environment_variables = {
+    COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.app_client.id
+    COGNITO_REDIRECT_URI = "${module.http_api.api_endpoint}/prod/auth/callback"
+    COGNITO_DOMAIN       = aws_cognito_user_pool_domain.user_pool_domain.domain
+    COGNITO_USER_POOL_ID = aws_cognito_user_pool.user_pool.id
+  }
+  layers = [aws_lambda_layer_version.python_dependencies.arn]
 }
 
 # Nota: Los permisos S3 deben agregarse manualmente al rol LabRole en la consola de AWS
@@ -91,7 +133,7 @@ module "http_api" {
     allow_methods = ["GET", "POST", "OPTIONS", "PUT"]
     allow_headers = ["authorization", "content-type"]
   }
-  
+
   authorizers = {
     cognito = {
       authorizer_type  = "JWT"
@@ -107,11 +149,14 @@ module "http_api" {
   tags               = local.common_tags
 }
 
+
 resource "aws_apigatewayv2_integration" "presign" {
   api_id                 = module.http_api.api_id
   integration_type       = "AWS_PROXY"
   integration_uri        = module.lambdas["presigned-url-generator"].lambda_function_arn
   payload_format_version = "2.0"
+  connection_type           = "INTERNET"
+  credentials_arn        = data.aws_iam_role.academy_role.arn  # Asociar el LabRole
 }
 
 resource "aws_apigatewayv2_integration" "report" {
@@ -119,6 +164,8 @@ resource "aws_apigatewayv2_integration" "report" {
   integration_type       = "AWS_PROXY"
   integration_uri        = module.lambdas["report-generator"].lambda_function_arn
   payload_format_version = "2.0"
+  connection_type           = "INTERNET"
+  credentials_arn        = data.aws_iam_role.academy_role.arn  # Asociar el LabRole
 }
 
 resource "aws_apigatewayv2_integration" "update_invoice" {
@@ -126,6 +173,8 @@ resource "aws_apigatewayv2_integration" "update_invoice" {
   integration_type       = "AWS_PROXY"
   integration_uri        = module.lambdas["invoice-data-updater"].lambda_function_arn
   payload_format_version = "2.0"
+  connection_type           = "INTERNET"
+  credentials_arn        = data.aws_iam_role.academy_role.arn  # Asociar el LabRole
 }
 
 resource "aws_apigatewayv2_integration" "get_invoice" {
@@ -133,6 +182,25 @@ resource "aws_apigatewayv2_integration" "get_invoice" {
   integration_type       = "AWS_PROXY"
   integration_uri        = module.lambdas["invoice-data-getter"].lambda_function_arn
   payload_format_version = "2.0"
+  connection_type           = "INTERNET"
+  credentials_arn        = data.aws_iam_role.academy_role.arn  # Asociar el LabRole
+}
+
+resource "aws_apigatewayv2_integration" "auth_callback" {
+  api_id                 = module.http_api.api_id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = module.lambdas["cognito-post-auth"].lambda_function_arn
+  payload_format_version = "2.0"
+  connection_type           = "INTERNET"
+  credentials_arn        = data.aws_iam_role.academy_role.arn  # Asociar el LabRole
+
+}
+
+resource "aws_apigatewayv2_route" "auth_callback" {
+  api_id             = module.http_api.api_id
+  route_key          = "GET /auth/callback"
+  target             = "integrations/${aws_apigatewayv2_integration.auth_callback.id}"
+  authorization_type = "NONE"
 }
 
 resource "aws_apigatewayv2_route" "presign" {
@@ -170,10 +238,11 @@ resource "aws_apigatewayv2_route" "get_invoice" {
 # Permisos para que API GW invoque tus Lambdas
 resource "aws_lambda_permission" "apigw_invoke" {
   for_each = {
-    presign = module.lambdas["presigned-url-generator"].lambda_function_name
-    report  = module.lambdas["report-generator"].lambda_function_name
-    update  = module.lambdas["invoice-data-updater"].lambda_function_name
-    getter  = module.lambdas["invoice-data-getter"].lambda_function_name
+    presign       = module.lambdas["presigned-url-generator"].lambda_function_name
+    report        = module.lambdas["report-generator"].lambda_function_name
+    update        = module.lambdas["invoice-data-updater"].lambda_function_name
+    getter        = module.lambdas["invoice-data-getter"].lambda_function_name
+    auth_callback = module.lambdas["cognito-post-auth"].lambda_function_name
   }
   statement_id  = "AllowInvoke-${each.key}"
   action        = "lambda:InvokeFunction"
@@ -182,18 +251,17 @@ resource "aws_lambda_permission" "apigw_invoke" {
   source_arn    = "${module.http_api.stage_execution_arn}/*/*"
 }
 
-
 module "ddb_invoice_jobs" {
   source  = "terraform-aws-modules/dynamodb-table/aws"
   version = "~> 5.1"
 
   name      = "InvoiceJobs"
-  hash_key  = "PK"       # userId o groupKey
-  range_key = "SK"       # invoiceId único
+  hash_key  = "PK" # userId o groupKey
+  range_key = "SK" # invoiceId único
 
   attributes = [
-    { name = "PK", type = "S" },   # userId o groupKey
-    { name = "SK", type = "S" },   # invoiceId único
+    { name = "PK", type = "S" }, # userId o groupKey
+    { name = "SK", type = "S" }, # invoiceId único
     { name = "userId", type = "S" },
     { name = "groupKey", type = "S" }
   ]
@@ -205,12 +273,12 @@ module "ddb_invoice_jobs" {
       name            = "GSI_User_Group"
       hash_key        = "userId"
       range_key       = "groupKey"
-      projection_type = "ALL"  # Asegúrate de que 'createdAt' esté incluido
+      projection_type = "ALL" # Asegúrate de que 'createdAt' esté incluido
     },
     {
       name            = "GSI_InvoiceId"
-      hash_key        = "PK"  # userId o groupKey
-      range_key       = "SK"  # invoiceId único
+      hash_key        = "PK" # userId o groupKey
+      range_key       = "SK" # invoiceId único
       projection_type = "ALL"
     }
   ]
@@ -218,17 +286,13 @@ module "ddb_invoice_jobs" {
   tags = local.common_tags
 }
 
-
-
-
-
 # Permiso para que S3 pueda invocar la Lambda
 resource "aws_lambda_permission" "s3_invoke_processor" {
-  statement_id = "AllowS3Invoke"
-  action       = "lambda:InvokeFunction"
+  statement_id  = "AllowS3Invoke"
+  action        = "lambda:InvokeFunction"
   function_name = module.lambdas["invoice-processor"].lambda_function_arn
-  principal    = "s3.amazonaws.com"
-  source_arn   = module.s3_buckets["facturas"].bucket_arn
+  principal     = "s3.amazonaws.com"
+  source_arn    = module.s3_buckets["facturas"].bucket_arn
 }
 
 # Configuración del "Trigger" (Notificación) en el bucket S3
@@ -237,7 +301,7 @@ resource "aws_s3_bucket_notification" "uploads_trigger" {
 
   lambda_function {
     lambda_function_arn = module.lambdas["invoice-processor"].lambda_function_arn
-    events = ["s3:ObjectCreated:*"]
+    events              = ["s3:ObjectCreated:*"]
   }
 
   depends_on = [
@@ -246,7 +310,7 @@ resource "aws_s3_bucket_notification" "uploads_trigger" {
 }
 
 resource "aws_cloudwatch_log_group" "invoice_processor" {
-  count = var.manage_lambda_log_group ? 1 : 0
+  count             = var.manage_lambda_log_group ? 1 : 0
   name              = "/aws/lambda/${module.lambdas["invoice-processor"].lambda_function_name}"
   retention_in_days = 14
   tags              = local.common_tags
@@ -262,12 +326,12 @@ resource "aws_cloudwatch_log_group" "apigw_access" {
 # Stage personalizado (NO $default)
 resource "aws_apigatewayv2_stage" "prod" {
   api_id      = module.http_api.api_id
-  name        = "prod"  # Usar nombre personalizado (no $default)
+  name        = "prod" # Usar nombre personalizado (no $default)
   auto_deploy = true
 
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.apigw_access.arn
-    format          = jsonencode({
+    format = jsonencode({
       requestId               = "$context.requestId"
       sourceIp                = "$context.identity.sourceIp"
       requestTime             = "$context.requestTime"

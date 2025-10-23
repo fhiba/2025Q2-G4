@@ -15,6 +15,7 @@ variable "lambda_functions" {
     source_path = string
     handler     = string
     runtime     = string
+    environment = optional(map(string))
   }))
   default = {}
 }
