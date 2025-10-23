@@ -101,7 +101,7 @@ environment_variables = merge(
     },
     # SPA URL for cognito-post-auth lambda
     each.key == "cognito-post-auth" ? {
-      SPA_URL = "http://localhost:3000"
+      SPA_URL = "http://${module.s3_buckets["spa"].website_endpoint}"
     } : {},
     # Extra solo si es la lambda "database-writer"
     each.key == "database-writer" ? {
