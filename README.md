@@ -141,6 +141,13 @@ resource "aws_s3_bucket_versioning" "this" {
 
 ## Guía de Ejecución
 
+
+### Paso 0: Ingresar a la carpeta production
+
+```bash
+cd production
+```
+
 ### Paso 1: Inicializar Terraform
 
 ```bash
@@ -150,6 +157,7 @@ terraform init
 ```
 
 ### Paso 2: Terraform Plan
+Asegurarse de no tener presentes los archivos terraform.tfstate y terraform.tfstate.backup antes de hacer el plan
 
 ```bash
 terraform plan 

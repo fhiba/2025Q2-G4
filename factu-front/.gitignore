@@ -22,3 +22,67 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# ================================
+# Terraform
+# ================================
+
+# Archivos de estado (NUNCA versionarlos)
+terraform.tfstate
+terraform.tfstate.*
+*.tfstate
+*.tfstate.*
+
+# Carpetas internas de Terraform
+.terraform/
+.terraform.lock.hcl
+
+# Archivos de plan
+plan.out
+*.plan
+
+# Variables de entorno
+*.tfvars
+*.tfvars.json
+
+# Archivos que puedan contener secretos
+secret.tf
+secrets.auto.tfvars
+*.auto.tfvars
+
+# Archivos de override locales
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Archivos temporales o sensibles
+.crash.log
+*.crash
+
+# ================================
+# Lambda (si usás)
+# ================================
+*.zip
+**/package-lock.json
+**/node_modules/
+**/__pycache__/
+
+# ================================
+# Editor / OS files
+# ================================
+# Mac
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+*.iml
+
