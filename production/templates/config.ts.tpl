@@ -2,12 +2,13 @@
 export const CONFIG = {
   API_GATEWAY_ENDPOINT: "${api_endpoint}",
 
-  COGNITO_CALLBACK_ENDPOINT: "${api_endpoint}/auth/callback",
-
   COGNITO: {
     region: "${region}",
     userPoolId: "${user_pool_id}",
     userPoolWebClientId: "${app_client_id}",
-    domain: "${cognito_domain}.auth.${region}.amazoncognito.com"
-  }
+
+    domain: "${cognito_domain}"
+  },
+
+  COGNITO_CALLBACK_ENDPOINT: "${api_endpoint}/auth/callback"
 };

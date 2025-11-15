@@ -66,9 +66,18 @@ resource "aws_cognito_user_pool_client" "app_client" {
   # Agregar la URL de callback (la URL a la que Cognito redirigirá después de la autenticación)
   callback_urls = [
     "${module.http_api.api_endpoint}/prod/auth/callback",
-    "http://localhost:3000",
-    "http://${module.s3_buckets["spa"].website_endpoint}"
-]
+    "http://localhost:3000/auth/callback"
+  ]
+
+  logout_urls = [
+    "${module.http_api.api_endpoint}/prod/auth/callback",
+    "http://localhost:3000"
+  ]
+
+
+
+
+
 
 }
 
@@ -359,7 +368,7 @@ resource "aws_apigatewayv2_stage" "prod" {
 }
 
 ###############################################################################
-# AUTOGENERAR config.ts PARA LA SPA (CORRECTO, SIN PROVIDER templatefile)
+# AUTOGENERAR config.ts PARA LA SPA
 ###############################################################################
 
 resource "local_file" "spa_config" {
@@ -368,21 +377,23 @@ resource "local_file" "spa_config" {
   content = templatefile(
     "${path.module}/templates/config.ts.tpl",
     {
-      api_endpoint   = module.http_api.api_endpoint
+      api_endpoint   = "${module.http_api.api_endpoint}/prod"
       region         = var.region
       user_pool_id   = aws_cognito_user_pool.user_pool.id
       app_client_id  = aws_cognito_user_pool_client.app_client.id
-      cognito_domain = local.cognito_domain
+
+      cognito_domain = "${aws_cognito_user_pool_domain.user_pool_domain.domain}.auth.${var.region}.amazoncognito.com"
     }
   )
 }
+
 
 ###############################################################################
 # BUILD de la SPA (npm install + npm run build)
 ###############################################################################
 
-resource "null_resource" "spa_build" {
-  # Se reconstruye si cambia el config.ts generado anteriormente
+resource "null_resource" "build_spa" {
+
   triggers = {
     config_hash = sha1(local_file.spa_config.content)
   }
@@ -393,24 +404,22 @@ resource "null_resource" "spa_build" {
   }
 }
 
-
 ###############################################################################
 # SUBIR SPA a S3 AUTOMÁTICAMENTE
 ###############################################################################
 
-resource "null_resource" "spa_deploy" {
+resource "null_resource" "upload_spa" {
   depends_on = [
-    null_resource.spa_build,
+    null_resource.build_spa,
     module.s3_buckets["spa"]
   ]
 
   provisioner "local-exec" {
     working_dir = "${path.module}/../factu-front"
-    command     = <<EOT
-aws s3 sync ./dist s3://${module.s3_buckets["spa"].bucket_name} --delete
-EOT
+    command     = "aws s3 sync ./dist s3://${module.s3_buckets["spa"].bucket_name} --delete"
   }
 }
+
 
 
 ###############################################################################
