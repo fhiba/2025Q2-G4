@@ -170,34 +170,16 @@ terraform plan
 terraform apply
 ```
 
-### Paso 4: Ir al factu-front y actualizar los siguientes archivos:
+### Paso 4: Usar la url que da al final del ap  ply
+Al final de ejecutar el apply retorna al url del front por la cual se puede acceder a la app
 
-en el config.ts del src modificar estos datos son accesibles desde la consola de aws
-
-
-   ```typescript
-  export const CONFIG = {
-  // API Gateway endpoint
-  API_GATEWAY_ENDPOINT: "https://f5o8rmaoa4.execute-api.us-east-1.amazonaws.com/prod",
-  
-  // Cognito callback endpoint (where Cognito redirects after login)
-  COGNITO_CALLBACK_ENDPOINT: "https://f5o8rmaoa4.execute-api.us-east-1.amazonaws.com/prod/auth/callback",
-  
-  // Cognito configuration
-  COGNITO: {
-    region: "us-east-1",
-    userPoolId: "us-east-1_5M9YXKeOe",
-    userPoolWebClientId: "7nilk1q7pj4k2adn54ocjhkg0u",
-    domain: "factutable-auth.auth.us-east-1.amazoncognito.com"
-  }
-};
-   ```
-### Paso 5: Buildear el proyecto
+Aparecera de la siguente manera:
 
 ```bash
-  npm install && npm run build
-```
-### Paso 6: Subir el contenido de dist al bucket
-<img width="1444" height="231" alt="image" src="https://github.com/user-attachments/assets/a58594aa-fbcb-4d41-92b6-756b1bd7d1a5" />
-Se deberia ver asi como en la foto.
+...
+Apply complete! Resources: 69 added, 0 changed, 0 destroyed.
 
+Outputs:
+
+spa_url = "http://factu-table-spa-xxxxxxx.s3-website-us-east-1.amazonaws.com"
+```
