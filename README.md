@@ -152,7 +152,7 @@ cd production
 
 ```bash
 # Inicializar el directorio de trabajo
-terraform init
+terraform init -upgrade
 
 ```
 
@@ -172,7 +172,7 @@ terraform apply
 
 ### Paso 4: Ir al factu-front y actualizar los siguientes archivos:
 
-en el config.ts del src modificar todo menos el COGNITO.domain con lo que corresponda, estos datos son accesibles desde la consola de aws
+en el config.ts del src modificar estos datos son accesibles desde la consola de aws
 
 
    ```typescript

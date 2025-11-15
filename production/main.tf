@@ -28,6 +28,16 @@ module "s3_buckets" {
   )
 }
 
+
+
+# Generamos un sufijo único para el dominio de Cognito
+resource "random_id" "cognito_suffix" {
+  byte_length = 4
+}
+locals {
+  cognito_domain = "factutable-auth-${random_id.cognito_suffix.hex}"
+}
+
 resource "aws_cognito_user_pool" "user_pool" {
   name = "factutable-user-pool"
   tags = local.common_tags
@@ -56,16 +66,16 @@ resource "aws_cognito_user_pool_client" "app_client" {
   # Agregar la URL de callback (la URL a la que Cognito redirigirá después de la autenticación)
   callback_urls = [
     "${module.http_api.api_endpoint}/prod/auth/callback",
-    "http://localhost:3000"
-  ]
+    "http://localhost:3000",
+    "http://${module.s3_buckets["spa"].website_endpoint}"
+]
 
 }
 
 
 resource "aws_cognito_user_pool_domain" "user_pool_domain" {
-  domain       = "factutable-auth" # El nombre de tu dominio
+  domain       = local.cognito_domain
   user_pool_id = aws_cognito_user_pool.user_pool.id
-
 }
 
 resource "aws_lambda_layer_version" "python_dependencies" {
@@ -346,4 +356,68 @@ resource "aws_apigatewayv2_stage" "prod" {
       integrationErrorMessage = "$context.integrationErrorMessage"
     })
   }
+}
+
+###############################################################################
+# AUTOGENERAR config.ts PARA LA SPA (CORRECTO, SIN PROVIDER templatefile)
+###############################################################################
+
+resource "local_file" "spa_config" {
+  filename = "${path.module}/../factu-front/src/config.ts"
+
+  content = templatefile(
+    "${path.module}/templates/config.ts.tpl",
+    {
+      api_endpoint   = module.http_api.api_endpoint
+      region         = var.region
+      user_pool_id   = aws_cognito_user_pool.user_pool.id
+      app_client_id  = aws_cognito_user_pool_client.app_client.id
+      cognito_domain = local.cognito_domain
+    }
+  )
+}
+
+###############################################################################
+# BUILD de la SPA (npm install + npm run build)
+###############################################################################
+
+resource "null_resource" "spa_build" {
+  # Se reconstruye si cambia el config.ts generado anteriormente
+  triggers = {
+    config_hash = sha1(local_file.spa_config.content)
+  }
+
+  provisioner "local-exec" {
+    working_dir = "${path.module}/../factu-front"
+    command     = "npm install && npm run build"
+  }
+}
+
+
+###############################################################################
+# SUBIR SPA a S3 AUTOMÁTICAMENTE
+###############################################################################
+
+resource "null_resource" "spa_deploy" {
+  depends_on = [
+    null_resource.spa_build,
+    module.s3_buckets["spa"]
+  ]
+
+  provisioner "local-exec" {
+    working_dir = "${path.module}/../factu-front"
+    command     = <<EOT
+aws s3 sync ./dist s3://${module.s3_buckets["spa"].bucket_name} --delete
+EOT
+  }
+}
+
+
+###############################################################################
+# OUTPUT de la URL final de la SPA
+###############################################################################
+
+output "spa_url" {
+  value       = "http://${module.s3_buckets["spa"].website_endpoint}"
+  description = "URL pública de la SPA desplegada"
 }
