@@ -11,7 +11,9 @@ locals {
     Project     = "FactuTable"
   }
 }
-
+locals {
+  cognito_callback_url = "http://${module.s3_buckets["spa"].bucket_name}.s3.${data.aws_region.current.name}.amazonaws.com/index.html"
+}
 # Buckets
 module "s3_buckets" {
   for_each = var.buckets
@@ -65,10 +67,9 @@ resource "aws_cognito_user_pool_client" "app_client" {
   allowed_oauth_scopes = ["openid", "email", "profile", "phone"]  # Scopes requeridos
   # Agregar la URL de callback (la URL a la que Cognito redirigirá después de la autenticación)
   callback_urls = [
-    "${module.http_api.api_endpoint}/prod/auth/callback",
+    "${module.http_api.api_endpoint}/auth/callback",
     "http://localhost:3000",
-    "http://${module.s3_buckets["spa"].website_endpoint}"
-]
+  ]
 
 }
 
@@ -377,6 +378,7 @@ resource "local_file" "spa_config" {
   )
 }
 
+
 ###############################################################################
 # BUILD de la SPA (npm install + npm run build)
 ###############################################################################
@@ -406,9 +408,8 @@ resource "null_resource" "spa_deploy" {
 
   provisioner "local-exec" {
     working_dir = "${path.module}/../factu-front"
-    command     = <<EOT
-aws s3 sync ./dist s3://${module.s3_buckets["spa"].bucket_name} --delete
-EOT
+    interpreter = ["/bin/bash", "-c"]
+    command     = "aws s3 sync ./dist s3://${module.s3_buckets["spa"].bucket_name} --delete"
   }
 }
 
