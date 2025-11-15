@@ -48,22 +48,23 @@ lambda_functions = {
     runtime     = "python3.13"
   },
 
-  # 4. Generador de Reportes (Disparado por API Gateway)
+  # 4. Generador de Reportes (Disparado por API Gateway) - busca data en DynamoDB
   "report-generator" = {
     source_path = "../src/lambda-report-generator"
     handler     = "main.handler"
     runtime     = "python3.13"
   }
 
-  # 5. Update invoice in database (Disparado por API Gateway)
-  "invoice-data-updater" = {
-    source_path = "../src/lambda-invoice-updater"
+  # 5. Export a CSV (Disparado por API Gateway) - genera CSV desde data
+  "export" = {
+    source_path = "../src/lambda-export-csv"
     handler     = "main.handler"
     runtime     = "python3.13"
   }
 
-  "invoice-data-getter" = {
-    source_path = "../src/lambda-invoice-getter"
+  # 6. Update invoice in database (Disparado por API Gateway)
+  "invoice-data-updater" = {
+    source_path = "../src/lambda-invoice-updater"
     handler     = "main.handler"
     runtime     = "python3.13"
   }

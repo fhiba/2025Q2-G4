@@ -3,6 +3,7 @@ import React from "react";
 import { BrowserRouter as Router, Route, Routes, useNavigate } from "react-router-dom";
 import { ApiService } from "./services/apiService";
 import { useAuth } from "./hooks/useAuth";
+import Reports from "./Reports";
 
 const App = () => {
   return (
@@ -10,6 +11,7 @@ const App = () => {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/home" element={<Home />} />
+        <Route path="/reports" element={<Reports />} />
         {/* <Route path="/auth/callback" element={<AuthCallBack />} /> */}
       </Routes>
     </Router>
@@ -183,6 +185,10 @@ const Home = () => {
     }
   };
 
+  const handleGoToReports = () => {
+    navigate('/reports');
+  };
+
   if (auth.isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
@@ -245,7 +251,15 @@ const Home = () => {
           <h1 className="text-3xl font-bold text-gray-900 mb-8 text-center">
             Subir Facturas
           </h1>
-          
+          {/* Botón para ir a Reports */}
+          <div className="mb-8 text-center">
+            <button
+              onClick={handleGoToReports}
+              className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+            >
+              Ver Reportes
+            </button>
+          </div>
           <div className="max-w-2xl mx-auto">
             {/* File Upload Area */}
             <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-indigo-400 transition-colors">
@@ -256,7 +270,6 @@ const Home = () => {
               <p className="text-gray-600 mb-6">
                 O haz clic para seleccionar un archivo
               </p>
-              
               <input
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png"
@@ -271,7 +284,6 @@ const Home = () => {
                 Seleccionar Archivo
               </label>
             </div>
-
             {/* Selected File Info */}
             {selectedFile && (
               <div className="mt-6 p-4 bg-gray-50 rounded-lg">
@@ -291,7 +303,6 @@ const Home = () => {
                 </div>
               </div>
             )}
-
             {/* Upload Button */}
             <div className="mt-8 text-center">
               <button
@@ -313,7 +324,6 @@ const Home = () => {
                 )}
               </button>
             </div>
-
             {/* Supported Formats */}
             <div className="mt-8 text-center">
               <p className="text-sm text-gray-500">
