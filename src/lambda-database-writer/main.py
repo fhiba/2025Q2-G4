@@ -85,6 +85,8 @@ def handler(event, context):
         table = dynamodb.Table(TABLE)
         table.put_item(
             Item={
+                "PK": key,                 # must match your Dynamo table PK
+                "SK": "META#1",
                 "file_key": key,
                 "data": json.loads(json.dumps(extracted_data), parse_float=Decimal)
             }
