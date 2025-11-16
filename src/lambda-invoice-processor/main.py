@@ -20,10 +20,15 @@ def handler(event, context):
                 # Llamar a database-writer para procesar el PDF
                 lambda_client = boto3.client('lambda')
                 
+                parts = key.split('/', 1)
+                user_id = parts[0] if len(parts) > 1 else None
+
                 payload = {
                     "bucket": bucket,
-                    "key": key
+                    "key": key,
+                    "userId": user_id,   # 👈 pass user to database-writer
                 }
+                
                 
                 response = lambda_client.invoke(
                     FunctionName='database-writer',

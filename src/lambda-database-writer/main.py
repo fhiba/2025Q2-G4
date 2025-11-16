@@ -42,7 +42,7 @@ def handler(event, context):
     # Entrada esperada: {"bucket": "...", "key": "..."}
     bucket = event["bucket"]
     key = event["key"]
-
+    user_id = event["userId"]
     try:
         # Descargar el PDF desde S3
         pdf_stream = io.BytesIO()
@@ -88,6 +88,8 @@ def handler(event, context):
                 "PK": key,                 # must match your Dynamo table PK
                 "SK": "META#1",
                 "file_key": key,
+                "userId": user_id,
+                "groupKey": "group_key",
                 "data": json.loads(json.dumps(extracted_data), parse_float=Decimal)
             }
         )
