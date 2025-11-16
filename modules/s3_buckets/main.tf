@@ -11,19 +11,24 @@ bucket = local.final_bucket_name
     { "Name" = var.bucket_name },
     var.tags
   )
-    cors_rule {
-      allowed_headers = ["*"]
-      allowed_methods = ["GET", "PUT", "POST"]
-      allowed_origins = ["*"]
-      expose_headers  = []
-      max_age_seconds = 3000
-    }
     lifecycle {
     precondition {
       condition     = !(var.enable_versioning && var.enable_website_hosting)
       
       error_message = "Error de configuración: Un bucket no puede ser un 'Sitio Web' y tener 'Versionado' al mismo tiempo. Elija solo una opción o ninguna."
     }
+  }
+}
+
+resource "aws_s3_bucket_cors_configuration" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["GET", "PUT", "POST"]
+    allowed_origins = ["*"]
+    expose_headers  = []
+    max_age_seconds = 3000
   }
 }
 
