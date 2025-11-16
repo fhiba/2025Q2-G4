@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiService } from './services/apiService';
-
+import { useAuth } from "./hooks/useAuth";
 
 interface ExtractedData {
   total?: string;
@@ -29,13 +29,14 @@ const Reports = () => {
   const [exporting, setExporting] = useState(false);
   const [generating, setGenerating] = useState(false);
   const navigate = useNavigate();
+  const auth = useAuth();
 
   // Fetch invoices using report-generator lambda
   const fetchInvoices = async () => {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('authToken');
+      const token = auth.getAccessToken();
       if (!token) throw new Error('No auth token');
       
       const data = await ApiService.fetchReport(token);
