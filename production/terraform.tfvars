@@ -15,10 +15,6 @@ buckets = {
   }
 }
 
-#    source_path = string
-#    handler     = string
-#    runtime     = string
-
 lambda_functions = {
   # 1. Hook de Cognito (Disparado por Cognito)
   "cognito-post-auth" = {

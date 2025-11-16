@@ -180,100 +180,59 @@ module "http_api" {
 }
 
 
-resource "aws_apigatewayv2_integration" "presign" {
+resource "aws_apigatewayv2_integration" "integrations" {
+  for_each = {
+    presign        = module.lambdas["presigned-url-generator"].lambda_function_arn
+    getter         = module.lambdas["invoice-getter"].lambda_function_arn
+    report         = module.lambdas["report-generator"].lambda_function_arn
+    export         = module.lambdas["export"].lambda_function_arn
+    update_invoice = module.lambdas["invoice-data-updater"].lambda_function_arn
+    auth_callback  = module.lambdas["cognito-post-auth"].lambda_function_arn
+  }
+
   api_id                 = module.http_api.api_id
   integration_type       = "AWS_PROXY"
-  integration_uri        = module.lambdas["presigned-url-generator"].lambda_function_arn
+  integration_uri        = each.value
   payload_format_version = "2.0"
-  connection_type           = "INTERNET"
-  credentials_arn        = data.aws_iam_role.academy_role.arn  # Asociar el LabRole
+  connection_type        = "INTERNET"
+  credentials_arn        = data.aws_iam_role.academy_role.arn
 }
 
-resource "aws_apigatewayv2_integration" "getter" {
-  api_id                 = module.http_api.api_id
-  integration_type       = "AWS_PROXY"
-  integration_uri        = module.lambdas["invoice-getter"].lambda_function_arn
-  payload_format_version = "2.0"
-  connection_type           = "INTERNET"
-  credentials_arn        = data.aws_iam_role.academy_role.arn  # Asociar el LabRole
-}
+resource "aws_apigatewayv2_route" "routes" {
+  for_each = {
+    auth_callback = {
+      route_key          = "GET /auth/callback"
+      authorization_type = "NONE"
+    }
+    presign = {
+      route_key          = "POST /uploads/presign"
+      authorization_type = "JWT"
+      authorizer_id      = module.http_api.authorizers["cognito"].id
+    }
+    report = {
+      route_key          = "GET /report"
+      authorization_type = "JWT"
+      authorizer_id      = module.http_api.authorizers["cognito"].id
+    }
+    export = {
+      route_key          = "GET /export"
+      authorization_type = "JWT"
+      authorizer_id      = module.http_api.authorizers["cognito"].id
+    }
+    getter = {
+      route_key          = "GET /invoices"
+      authorization_type = "JWT"
+      authorizer_id      = module.http_api.authorizers["cognito"].id
+    }
+  }
 
-resource "aws_apigatewayv2_integration" "report" {
-  api_id                 = module.http_api.api_id
-  integration_type       = "AWS_PROXY"
-  integration_uri        = module.lambdas["report-generator"].lambda_function_arn
-  payload_format_version = "2.0"
-  connection_type           = "INTERNET"
-  credentials_arn        = data.aws_iam_role.academy_role.arn  # Asociar el LabRole
-}
-
-resource "aws_apigatewayv2_integration" "export" {
-  api_id                 = module.http_api.api_id
-  integration_type       = "AWS_PROXY"
-  integration_uri        = module.lambdas["export"].lambda_function_arn
-  payload_format_version = "2.0"
-  connection_type           = "INTERNET"
-  credentials_arn        = data.aws_iam_role.academy_role.arn  # Asociar el LabRole
-}
-
-resource "aws_apigatewayv2_integration" "update_invoice" {
-  api_id                 = module.http_api.api_id
-  integration_type       = "AWS_PROXY"
-  integration_uri        = module.lambdas["invoice-data-updater"].lambda_function_arn
-  payload_format_version = "2.0"
-  connection_type           = "INTERNET"
-  credentials_arn        = data.aws_iam_role.academy_role.arn  # Asociar el LabRole
-}
-
-
-
-resource "aws_apigatewayv2_integration" "auth_callback" {
-  api_id                 = module.http_api.api_id
-  integration_type       = "AWS_PROXY"
-  integration_uri        = module.lambdas["cognito-post-auth"].lambda_function_arn
-  payload_format_version = "2.0"
-  connection_type           = "INTERNET"
-  credentials_arn        = data.aws_iam_role.academy_role.arn  # Asociar el LabRole
-
-}
-
-resource "aws_apigatewayv2_route" "auth_callback" {
   api_id             = module.http_api.api_id
-  route_key          = "GET /auth/callback"
-  target             = "integrations/${aws_apigatewayv2_integration.auth_callback.id}"
-  authorization_type = "NONE"
-}
+  route_key          = each.value.route_key
+  target             = "integrations/${aws_apigatewayv2_integration.integrations[each.key].id}"
+  authorization_type = each.value.authorization_type
 
-resource "aws_apigatewayv2_route" "presign" {
-  api_id             = module.http_api.api_id
-  route_key          = "POST /uploads/presign"
-  target             = "integrations/${aws_apigatewayv2_integration.presign.id}"
-  authorization_type = "JWT"
-  authorizer_id      = module.http_api.authorizers["cognito"].id
-}
-
-resource "aws_apigatewayv2_route" "report" {
-  api_id             = module.http_api.api_id
-  route_key          = "GET /report"
-  target             = "integrations/${aws_apigatewayv2_integration.report.id}"
-  authorization_type = "JWT"
-  authorizer_id      = module.http_api.authorizers["cognito"].id
-}
-
-resource "aws_apigatewayv2_route" "export" {
-  api_id             = module.http_api.api_id
-  route_key          = "GET /export"
-  target             = "integrations/${aws_apigatewayv2_integration.export.id}"
-  authorization_type = "JWT"
-  authorizer_id      = module.http_api.authorizers["cognito"].id
-}
-
-resource "aws_apigatewayv2_route" "getter" {
-  api_id             = module.http_api.api_id
-  route_key          = "GET /invoices"
-  target             = "integrations/${aws_apigatewayv2_integration.getter.id}"
-  authorization_type = "JWT"
-  authorizer_id      = module.http_api.authorizers["cognito"].id
+  # optional authorizer_id only set when present in map
+  authorizer_id = lookup(each.value, "authorizer_id", null)
 }
 
 # Permisos para que API GW invoque tus Lambdas
