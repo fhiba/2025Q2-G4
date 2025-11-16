@@ -131,6 +131,10 @@ environment_variables = merge(
       TABLE_NAME = module.ddb_invoice_jobs.dynamodb_table_id
       INDEX_NAME = "GSI_User_Group"
     } : {},
+    each.key == "invoice-getter" ? {
+      TABLE_NAME = module.ddb_invoice_jobs.dynamodb_table_id
+      INDEX_NAME = "GSI_User_Group"
+    } : {},
     each.key == "export" ? {
       TABLE_NAME = module.ddb_invoice_jobs.dynamodb_table_id
       INDEX_NAME = "GSI_User_Group"
@@ -180,6 +184,15 @@ resource "aws_apigatewayv2_integration" "presign" {
   api_id                 = module.http_api.api_id
   integration_type       = "AWS_PROXY"
   integration_uri        = module.lambdas["presigned-url-generator"].lambda_function_arn
+  payload_format_version = "2.0"
+  connection_type           = "INTERNET"
+  credentials_arn        = data.aws_iam_role.academy_role.arn  # Asociar el LabRole
+}
+
+resource "aws_apigatewayv2_integration" "getter" {
+  api_id                 = module.http_api.api_id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = module.lambdas["invoice-getter"].lambda_function_arn
   payload_format_version = "2.0"
   connection_type           = "INTERNET"
   credentials_arn        = data.aws_iam_role.academy_role.arn  # Asociar el LabRole
@@ -255,12 +268,20 @@ resource "aws_apigatewayv2_route" "export" {
   authorizer_id      = module.http_api.authorizers["cognito"].id
 }
 
+resource "aws_apigatewayv2_route" "getter" {
+  api_id             = module.http_api.api_id
+  route_key          = "GET /invoices"
+  target             = "integrations/${aws_apigatewayv2_integration.getter.id}"
+  authorization_type = "JWT"
+  authorizer_id      = module.http_api.authorizers["cognito"].id
+}
 
 # Permisos para que API GW invoque tus Lambdas
 resource "aws_lambda_permission" "apigw_invoke" {
   for_each = {
     presign       = module.lambdas["presigned-url-generator"].lambda_function_name
     report        = module.lambdas["report-generator"].lambda_function_name
+    getter        = module.lambdas["invoice-getter"].lambda_function_name
     export        = module.lambdas["export"].lambda_function_name
     update        = module.lambdas["invoice-data-updater"].lambda_function_name
     auth_callback = module.lambdas["cognito-post-auth"].lambda_function_name

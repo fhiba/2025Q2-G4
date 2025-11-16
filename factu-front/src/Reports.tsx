@@ -5,33 +5,32 @@ import { useNavigate } from 'react-router-dom';
 import { ApiService } from './services/apiService';
 import { useAuth } from "./hooks/useAuth";
 
-interface ExtractedData {
-  total?: string;
-  fecha?: string;
-  cuit?: string;
-  proveedor?: string;
-  text_length?: number;
-  file_size?: number;
+interface Invoice {
+  file_key: string;
+  filename: string;
 }
 
-interface InvoiceItem {
-  PK: string;
-  SK: string;
-  file_key: string;
-  data: ExtractedData;
+interface ExtractedData {
+  total?: string | null;
+  fecha?: string | null;
+  cuit?: string | null;
+  proveedor?: string | null;
+  text_length?: number | null;
+  file_size?: number | null;
 }
 
 const Reports = () => {
-  const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
-  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceItem | null>(null);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null);
+  const [invoiceData, setInvoiceData] = useState<{ [key: string]: ExtractedData }>({});
+  const [loadingData, setLoadingData] = useState<{ [key: string]: boolean }>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const navigate = useNavigate();
   const auth = useAuth();
 
-  // Fetch invoices using report-generator lambda
+  // Fetch list of invoices (file_key and filename)
   const fetchInvoices = async () => {
     setLoading(true);
     setError(null);
@@ -39,9 +38,8 @@ const Reports = () => {
       const token = auth.getAccessToken();
       if (!token) throw new Error('No auth token');
       
-      const data = await ApiService.fetchReport(token);
-      // La lambda devuelve { username, facturas } o data.facturas directamente
-      setInvoices(Array.isArray(data.facturas) ? data.facturas : Array.isArray(data) ? data : []);
+      const data = await ApiService.fetchInvoices(token);
+      setInvoices(Array.isArray(data.facturas) ? data.facturas : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch invoices');
       console.error('Error fetching invoices:', err);
@@ -50,12 +48,41 @@ const Reports = () => {
     }
   };
 
-  // Export invoices to CSV (uses ApiService.downloadReport)
+  // Fetch extracted data for a specific invoice
+  const fetchInvoiceData = async (fileKey: string) => {
+    setLoadingData(prev => ({ ...prev, [fileKey]: true }));
+    try {
+      const token = auth.getAccessToken();
+      if (!token) throw new Error('No auth token');
+      
+      const response = await ApiService.fetchReportForInvoice(token, fileKey);
+      setInvoiceData(prev => ({ ...prev, [fileKey]: response.data || {} }));
+    } catch (err) {
+      console.error('Error fetching invoice data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch invoice data');
+    } finally {
+      setLoadingData(prev => ({ ...prev, [fileKey]: false }));
+    }
+  };
+
+  // Handle invoice expansion/collapse
+  const handleToggleInvoice = async (fileKey: string) => {
+    if (expandedInvoice === fileKey) {
+      setExpandedInvoice(null);
+    } else {
+      setExpandedInvoice(fileKey);
+      if (!invoiceData[fileKey]) {
+        await fetchInvoiceData(fileKey);
+      }
+    }
+  };
+
+  // Export invoices to CSV
   const handleExportCSV = async () => {
     setExporting(true);
     setError(null);
     try {
-      const token = localStorage.getItem('authToken');
+      const token = auth.getAccessToken();
       if (!token) throw new Error('No auth token');
       const blob = await ApiService.downloadReport(token);
       const url = window.URL.createObjectURL(blob);
@@ -74,21 +101,6 @@ const Reports = () => {
     }
   };
 
-  // Trigger report generation (uses ApiService.generateReport)
-  const handleGenerateReport = async () => {
-    setGenerating(true);
-    setError(null);
-    try {
-      await fetchInvoices();
-      setError('Invoices refreshed successfully!');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to refresh invoices');
-      console.error('Error refreshing invoices:', err);
-    } finally {
-      setGenerating(false);
-    }
-  };
-
   useEffect(() => {
     fetchInvoices();
     // eslint-disable-next-line
@@ -96,7 +108,7 @@ const Reports = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header igual que en App.tsx */}
+      {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
@@ -114,25 +126,17 @@ const Reports = () => {
           </div>
         </div>
       </header>
+
       <div className="max-w-4xl mx-auto p-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Uploaded Invoices</h1>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={handleGenerateReport}
-              disabled={generating}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-            >
-              {generating ? 'Generating...' : 'Generate Report'}
-            </button>
-            <button
-              onClick={handleExportCSV}
-              disabled={exporting || invoices.length === 0}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-            >
-              {exporting ? 'Exporting...' : 'Export to CSV'}
-            </button>
-          </div>
+          <button
+            onClick={handleExportCSV}
+            disabled={exporting || invoices.length === 0}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          >
+            {exporting ? 'Exporting...' : 'Export to CSV'}
+          </button>
         </div>
 
         {error && (
@@ -141,90 +145,67 @@ const Reports = () => {
           </div>
         )}
 
-        {!selectedInvoice ? (
-          <div>
-            {loading ? (
-              <div className="text-center py-8">
-                <p className="text-gray-600">Loading invoices...</p>
-              </div>
-            ) : invoices.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-gray-600">No invoices uploaded yet</p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {invoices.map((invoice) => (
-                  <div
-                    key={`${invoice.PK}-${invoice.SK}`}
-                    onClick={() => setSelectedInvoice(invoice)}
-                    className="p-4 bg-white border border-gray-200 rounded-lg shadow hover:shadow-lg cursor-pointer transition-shadow"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-semibold text-gray-900 break-all">{invoice.file_key}</p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          {invoice.data.proveedor && `Provider: ${invoice.data.proveedor}`}
-                        </p>
-                      </div>
-                      {invoice.data.total && (
-                        <p className="text-lg font-bold text-gray-900">
-                          ${invoice.data.total}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+        {loading ? (
+          <div className="text-center py-8">
+            <p className="text-gray-600">Loading invoices...</p>
+          </div>
+        ) : invoices.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-gray-600">No invoices uploaded yet</p>
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow p-8">
-            <button
-              onClick={() => setSelectedInvoice(null)}
-              className="mb-6 px-4 py-2 bg-gray-200 text-gray-900 rounded-lg hover:bg-gray-300 transition-colors"
-            >
-              ← Back to List
-            </button>
+          <div className="grid gap-4">
+            {invoices.map((invoice) => (
+              <div key={invoice.file_key} className="bg-white border border-gray-200 rounded-lg shadow">
+                <button
+                  onClick={() => handleToggleInvoice(invoice.file_key)}
+                  className="w-full px-4 py-4 text-left hover:bg-gray-50 transition-colors flex justify-between items-center"
+                >
+                  <div>
+                    <p className="font-semibold text-gray-900">{invoice.filename}</p>
+                    <p className="text-sm text-gray-600 mt-1">File: {invoice.file_key}</p>
+                  </div>
+                  <span className="text-gray-400">
+                    {expandedInvoice === invoice.file_key ? '▼' : '▶'}
+                  </span>
+                </button>
 
-            <h2 className="text-2xl font-bold text-gray-900 mb-6 break-all">
-              {selectedInvoice.file_key}
-            </h2>
-
-            <div className="grid grid-cols-2 gap-6">
-              <div>
-                <p className="text-sm font-semibold text-gray-600">Total</p>
-                <p className="text-xl font-bold text-gray-900">
-                  {selectedInvoice.data.total || 'N/A'}
-                </p>
+                {expandedInvoice === invoice.file_key && (
+                  <div className="border-t border-gray-200 px-4 py-4 bg-gray-50">
+                    {loadingData[invoice.file_key] ? (
+                      <p className="text-gray-600">Loading data...</p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-600">Total</p>
+                          <p className="text-lg font-bold text-gray-900">
+                            {invoiceData[invoice.file_key]?.total || 'N/A'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-600">Date</p>
+                          <p className="text-lg font-bold text-gray-900">
+                            {invoiceData[invoice.file_key]?.fecha || 'N/A'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-600">CUIT</p>
+                          <p className="text-lg font-bold text-gray-900">
+                            {invoiceData[invoice.file_key]?.cuit || 'N/A'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-600">Provider</p>
+                          <p className="text-lg font-bold text-gray-900">
+                            {invoiceData[invoice.file_key]?.proveedor || 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-
-              <div>
-                <p className="text-sm font-semibold text-gray-600">Date</p>
-                <p className="text-xl font-bold text-gray-900">
-                  {selectedInvoice.data.fecha || 'N/A'}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-sm font-semibold text-gray-600">CUIT</p>
-                <p className="text-xl font-bold text-gray-900">
-                  {selectedInvoice.data.cuit || 'N/A'}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-sm font-semibold text-gray-600">Provider</p>
-                <p className="text-xl font-bold text-gray-900">
-                  {selectedInvoice.data.proveedor || 'N/A'}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <p className="text-xs text-gray-500">
-                File Size: {selectedInvoice.data.file_size || 'N/A'} bytes | Text Length: {selectedInvoice.data.text_length || 'N/A'} characters
-              </p>
-            </div>
+            ))}
           </div>
         )}
       </div>

@@ -2,14 +2,21 @@ import json
 import os
 import boto3
 from boto3.dynamodb.conditions import Key
+from decimal import Decimal
 
 dynamodb = boto3.resource("dynamodb")
+
+
+def _convert_decimal(obj):
+    """Convert Decimal objects to string for JSON serialization"""
+    if isinstance(obj, Decimal):
+        return str(obj)
+    raise TypeError
 TABLE = os.environ.get("TABLE_NAME")
 INDEX_NAME = os.environ.get("INDEX_NAME", "GSI_User_Group")
 
 
 def _extract_username_from_event(event: dict):
-    # same extraction logic as other lambdas
     if isinstance(event, dict) and event.get("username"):
         return event.get("username")
     qsp = event.get("queryStringParameters") if isinstance(event, dict) else None
@@ -24,6 +31,14 @@ def _extract_username_from_event(event: dict):
     return None
 
 
+def _get_file_key_from_event(event: dict):
+    """Extract file_key from query string parameters"""
+    qsp = event.get("queryStringParameters") if isinstance(event, dict) else None
+    if qsp:
+        return qsp.get("file_key")
+    return None
+
+
 def handler(event, context):
     if not TABLE:
         return {"statusCode": 500, "body": json.dumps({"error": "Missing TABLE_NAME env var"})}
@@ -32,6 +47,8 @@ def handler(event, context):
     if not username:
         return {"statusCode": 400, "body": json.dumps({"error": "Missing 'username' parameter or JWT claim"})}
 
+    file_key = _get_file_key_from_event(event)
+    
     table = dynamodb.Table(TABLE)
 
     try:
@@ -41,7 +58,21 @@ def handler(event, context):
         )
         items = response.get("Items", [])
 
-        # Filtrar solo los campos necesarios (devolver null si no existen)
+        # Filter by file_key if provided
+        if file_key:
+            items = [item for item in items if item.get("file_key") == file_key]
+            if not items:
+                return {"statusCode": 404, "body": json.dumps({"error": "Invoice not found"}, default=_convert_decimal)}
+            # Return single invoice data
+            item = items[0]
+            data = item.get("data", {})
+            return {
+                "statusCode": 200,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"file_key": file_key, "data": data}, ensure_ascii=False, default=_convert_decimal)
+            }
+        
+        # Return all invoices (filtered only fields needed)
         facturas = []
         for item in items:
             data = item.get("data", {})
@@ -58,7 +89,7 @@ def handler(event, context):
         return {
             "statusCode": 200,
             "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"username": username, "facturas": facturas}, ensure_ascii=False)
+            "body": json.dumps({"username": username, "facturas": facturas}, ensure_ascii=False, default=_convert_decimal),
         }
 
     except Exception as e:

@@ -64,10 +64,10 @@ export class ApiService {
     }
   }
 
-  // Fetch report (invoices/data) from report-generator lambda
-  static async fetchReport(token: string): Promise<any> {
+  // Fetch invoices list (file_key and filename only)
+  static async fetchInvoices(token: string): Promise<any> {
     try {
-      const response = await fetch(`${API_BASE_URL}/report`, {
+      const response = await fetch(`${API_BASE_URL}/invoices`, {
         method: 'GET',
         headers: this.getAuthHeaders(token),
       });
@@ -79,7 +79,27 @@ export class ApiService {
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error('Error fetching report:', error);
+      console.error('Error fetching invoices:', error);
+      throw error;
+    }
+  }
+
+  // Fetch report data for a specific invoice (by file_key)
+  static async fetchReportForInvoice(token: string, fileKey: string): Promise<any> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/report?file_key=${encodeURIComponent(fileKey)}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(token),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error fetching report for invoice:', error);
       throw error;
     }
   }

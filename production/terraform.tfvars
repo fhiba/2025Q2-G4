@@ -68,6 +68,13 @@ lambda_functions = {
     handler     = "main.handler"
     runtime     = "python3.13"
   }
+
+  # 7. Invoice Getter (Disparado por API Gateway)
+  "invoice-getter" = {
+    source_path = "../src/lambda-invoice-getter"
+    handler     = "main.handler"
+    runtime     = "python3.13"
+  }
 }
 
 
