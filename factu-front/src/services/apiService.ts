@@ -19,11 +19,12 @@ export class ApiService {
     };
   }
 
-  static async getPresignedUrl(token: string): Promise<PresignedUrlResponse> {
+  static async getPresignedUrl(token: string, fileName: string): Promise<PresignedUrlResponse> {
     try {
       const response = await fetch(`${API_BASE_URL}/uploads/presign`, {
         method: 'POST',
         headers: this.getAuthHeaders(token),
+        body: JSON.stringify({ fileName })
       });
 
       if (!response.ok) {
@@ -100,6 +101,27 @@ export class ApiService {
       return data;
     } catch (error) {
       console.error('Error fetching report for invoice:', error);
+      throw error;
+    }
+  }
+
+  // Request a presigned download URL for a specific PDF (via pdf-downloader lambda)
+  static async downloadPdf(token: string, fileKey: string): Promise<string> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/download/pdf`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(token),
+        body: JSON.stringify({ file_key: fileKey })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.download_url;
+    } catch (error) {
+      console.error('Error requesting PDF download URL:', error);
       throw error;
     }
   }

@@ -113,7 +113,7 @@ const Reports = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
-              <div className="text-2xl font-bold text-indigo-600">FactuTable</div>
+              <div onClick={() => navigate('/home')} className="text-2xl font-bold text-indigo-600">FactuTable</div>
             </div>
             <div className="flex items-center space-x-4">
               <button
@@ -157,18 +157,45 @@ const Reports = () => {
           <div className="grid gap-4">
             {invoices.map((invoice) => (
               <div key={invoice.file_key} className="bg-white border border-gray-200 rounded-lg shadow">
-                <button
-                  onClick={() => handleToggleInvoice(invoice.file_key)}
-                  className="w-full px-4 py-4 text-left hover:bg-gray-50 transition-colors flex justify-between items-center"
-                >
-                  <div>
-                    <p className="font-semibold text-gray-900">{invoice.filename}</p>
-                    <p className="text-sm text-gray-600 mt-1">File: {invoice.file_key}</p>
+                <div className="w-full px-4 py-4 hover:bg-gray-50 transition-colors flex justify-between items-center">
+                  <button
+                    onClick={() => handleToggleInvoice(invoice.file_key)}
+                    className="text-left flex-1 text-sm sm:text-base"
+                  >
+                    <div>
+                      <p className="font-semibold text-gray-900">{invoice.filename}</p>
+                      <p className="text-sm text-gray-600 mt-1">File: {invoice.file_key}</p>
+                    </div>
+                  </button>
+
+                  <div className="flex items-center space-x-3 ml-4">
+                    <button
+                      title="Download PDF"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          const token = auth.getAccessToken();
+                          if (!token) throw new Error('No auth token');
+                          const url = await ApiService.downloadPdf(token, invoice.file_key);
+                          window.open(url, '_blank');
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : 'Failed to request PDF');
+                          console.error('Error requesting PDF:', err);
+                        }
+                      }}
+                      className="p-2 bg-indigo-50 hover:bg-indigo-100 rounded-md text-indigo-600"
+                    >
+                      ⬇️
+                    </button>
+
+                    <button
+                      onClick={() => handleToggleInvoice(invoice.file_key)}
+                      className="p-2 text-gray-400"
+                    >
+                      {expandedInvoice === invoice.file_key ? '▼' : '▶'}
+                    </button>
                   </div>
-                  <span className="text-gray-400">
-                    {expandedInvoice === invoice.file_key ? '▼' : '▶'}
-                  </span>
-                </button>
+                </div>
 
                 {expandedInvoice === invoice.file_key && (
                   <div className="border-t border-gray-200 px-4 py-4 bg-gray-50">

@@ -146,6 +146,8 @@ environment_variables = merge(
 
 
   layers = [aws_lambda_layer_version.python_dependencies.arn]
+  # Increase default timeout to 60 seconds for all deployed functions
+  timeout = 60
 }
 
 # Nota: Los permisos S3 deben agregarse manualmente al rol LabRole en la consola de AWS
@@ -186,6 +188,7 @@ resource "aws_apigatewayv2_integration" "integrations" {
     getter         = module.lambdas["invoice-getter"].lambda_function_arn
     report         = module.lambdas["report-generator"].lambda_function_arn
     export         = module.lambdas["export"].lambda_function_arn
+    pdf_downloader = module.lambdas["pdf-downloader"].lambda_function_arn
     update_invoice = module.lambdas["invoice-data-updater"].lambda_function_arn
     auth_callback  = module.lambdas["cognito-post-auth"].lambda_function_arn
   }
@@ -206,6 +209,11 @@ resource "aws_apigatewayv2_route" "routes" {
     }
     presign = {
       route_key          = "POST /uploads/presign"
+      authorization_type = "JWT"
+      authorizer_id      = module.http_api.authorizers["cognito"].id
+    }
+    pdf_downloader = {
+      route_key          = "POST /download/pdf"
       authorization_type = "JWT"
       authorizer_id      = module.http_api.authorizers["cognito"].id
     }
@@ -244,6 +252,7 @@ resource "aws_lambda_permission" "apigw_invoke" {
     export        = module.lambdas["export"].lambda_function_name
     update        = module.lambdas["invoice-data-updater"].lambda_function_name
     auth_callback = module.lambdas["cognito-post-auth"].lambda_function_name
+    pdf_downloader = module.lambdas["pdf-downloader"].lambda_function_name
   }
   statement_id  = "AllowInvoke-${each.key}"
   action        = "lambda:InvokeFunction"

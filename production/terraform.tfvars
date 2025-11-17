@@ -51,6 +51,7 @@ lambda_functions = {
     runtime     = "python3.13"
   }
 
+
   # 5. Export a CSV (Disparado por API Gateway) - genera CSV desde data
   "export" = {
     source_path = "../src/lambda-export-csv"
@@ -68,6 +69,13 @@ lambda_functions = {
   # 7. Invoice Getter (Disparado por API Gateway)
   "invoice-getter" = {
     source_path = "../src/lambda-invoice-getter"
+    handler     = "main.handler"
+    runtime     = "python3.13"
+  }
+
+  # 8. PDF downloader (Disparado por API Gateway) - genera presigned URL para descargar
+  "pdf-downloader" = {
+    source_path = "../src/lamda-pdf-downloader"
     handler     = "main.handler"
     runtime     = "python3.13"
   }

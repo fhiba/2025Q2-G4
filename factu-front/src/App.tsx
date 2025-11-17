@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import React from "react";
-import { BrowserRouter as Router, Route, Routes, useNavigate } from "react-router-dom";
+import { HashRouter as Router, Route, Routes, useNavigate } from "react-router-dom";
 import { ApiService } from "./services/apiService";
 import { useAuth } from "./hooks/useAuth";
 import Reports from "./Reports";
@@ -109,26 +109,6 @@ const Landing = () => {
             </button>
           </div>
 
-          {/* Features Grid */}
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            <div className="bg-white/60 backdrop-blur-sm rounded-xl p-6 shadow-lg">
-              <div className="text-4xl mb-4">📊</div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Análisis Inteligente</h3>
-              <p className="text-gray-600">Extrae datos automáticamente de tus facturas y obtén insights valiosos.</p>
-            </div>
-            
-            <div className="bg-white/60 backdrop-blur-sm rounded-xl p-6 shadow-lg">
-              <div className="text-4xl mb-4">⚡</div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Procesamiento Rápido</h3>
-              <p className="text-gray-600">Procesa cientos de facturas en segundos con nuestra tecnología avanzada.</p>
-            </div>
-            
-            <div className="bg-white/60 backdrop-blur-sm rounded-xl p-6 shadow-lg">
-              <div className="text-4xl mb-4">🔒</div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Seguro y Confiable</h3>
-              <p className="text-gray-600">Tus datos están protegidos con los más altos estándares de seguridad.</p>
-            </div>
-          </div>
         </div>
       </main>
 
@@ -166,7 +146,7 @@ const Home = () => {
       console.log('Obteniendo presigned URL para:', selectedFile.name);
       
       // Obtener presigned URL del API Gateway
-      const presignedData = await ApiService.getPresignedUrl(accessToken);
+      const presignedData = await ApiService.getPresignedUrl(accessToken, selectedFile.name);
       console.log('Presigned URL obtenida:', presignedData);
       
       // Subir archivo a S3 usando la presigned URL

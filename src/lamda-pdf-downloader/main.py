@@ -13,7 +13,18 @@ def handler(event, context):
     }
     Devuelve un presigned URL de descarga válido 1 hora.
     """
+    # API Gateway v2 usually forwards the JSON body as a string in event['body'].
+    # Accept both direct event top-level param (for local testing) and JSON body.
     key = event.get("file_key")
+    if not key:
+        body = event.get("body")
+        if body:
+            try:
+                parsed = json.loads(body)
+                key = parsed.get("file_key")
+            except Exception:
+                key = None
+
     if not key:
         return {
             "statusCode": 400,
