@@ -3,8 +3,8 @@ variable "bucket_name" {
   type        = string
     # longitud no excedida, nosotros sumamos un hash para asegurar uniqueness.
     validation {
-    condition     = length(var.bucket_name) <= 56
-    error_message = "El 'bucket_name' base no puede tener más de 56 caracteres, para dejar espacio al sufijo único (-xxxxxx)."
+    condition     = length(var.bucket_name) <= 37
+    error_message = "El 'bucket_name' (usado como prefix) no puede tener más de 37 caracteres según las reglas de AWS S3."
   }
     # nombre con formato correcto
     validation {

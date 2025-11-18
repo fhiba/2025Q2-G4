@@ -1,12 +1,5 @@
-# para asegurar el nombre unico
-
-resource "random_id" "suffix" {
-  byte_length = 3
-}
-
-
 resource "aws_s3_bucket" "this" {
-bucket = local.final_bucket_name
+  bucket_prefix = local.name_lower
   tags   = merge(
     { "Name" = var.bucket_name },
     var.tags
