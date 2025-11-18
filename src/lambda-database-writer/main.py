@@ -39,11 +39,27 @@ def parse_invoice_text(text):
 
 
 def handler(event, context):
-    # Entrada esperada: {"bucket": "...", "key": "..."}
-    bucket = event["bucket"]
-    key = event["key"]
-    user_id = event["userId"]
+    """
+    Procesa mensajes de SQS que contienen información de archivos PDF a procesar.
+    El evento puede venir directamente de SQS (con Records) o como payload directo.
+    """
     try:
+        # Si el evento viene de SQS, extraer el mensaje del formato SQS
+        if "Records" in event and len(event["Records"]) > 0:
+            # Formato de evento SQS
+            sqs_record = event["Records"][0]
+            message_body = json.loads(sqs_record["body"])
+            bucket = message_body["bucket"]
+            key = message_body["key"]
+            user_id = message_body.get("userId")
+        else:
+            # Formato directo (para compatibilidad con invocación directa)
+            bucket = event["bucket"]
+            key = event["key"]
+            user_id = event.get("userId")
+        
+        print(f"Procesando archivo: {key} del bucket: {bucket} para usuario: {user_id}")
+        
         # Descargar el PDF desde S3
         pdf_stream = io.BytesIO()
         s3.download_fileobj(bucket, key, pdf_stream)
@@ -104,6 +120,6 @@ def handler(event, context):
             "statusCode": 500,
             "body": json.dumps({
                 "error": str(e),
-                "file_key": key
+                "file_key": key if 'key' in locals() else "unknown"
             })
         }

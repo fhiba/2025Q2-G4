@@ -126,6 +126,10 @@ environment_variables = merge(
     each.key == "database-writer" ? {
       TABLE_NAME = module.ddb_invoice_jobs.dynamodb_table_id
     } : {},
+    # SQS Queue URL para invoice-processor
+    each.key == "invoice-processor" ? {
+      SQS_QUEUE_URL = aws_sqs_queue.invoice_processing_queue.id
+    } : {},
 
     each.key == "report-generator" ? {
       TABLE_NAME = module.ddb_invoice_jobs.dynamodb_table_id
@@ -276,6 +280,60 @@ module "ddb_invoice_jobs" {
   tags = local.common_tags
 }
 
+# Cola SQS para desacoplar el procesamiento de facturas
+resource "aws_sqs_queue" "invoice_processing_queue" {
+  name                      = "factutable-invoice-processing"
+  message_retention_seconds = 345600 # 4 días
+  visibility_timeout_seconds = 60    # Tiempo suficiente para procesar
+  receive_wait_time_seconds  = 20    # Long polling
+
+  tags = merge(
+    local.common_tags,
+    { Name = "factutable-invoice-processing" }
+  )
+}
+
+# Dead Letter Queue para mensajes que no se procesan correctamente
+resource "aws_sqs_queue" "invoice_processing_dlq" {
+  name                      = "factutable-invoice-processing-dlq"
+  message_retention_seconds = 1209600 # 14 días (máximo)
+
+  tags = merge(
+    local.common_tags,
+    { Name = "factutable-invoice-processing-dlq" }
+  )
+}
+
+# Política de redrive para enviar mensajes fallidos a la DLQ
+resource "aws_sqs_queue_redrive_policy" "invoice_processing_redrive" {
+  queue_url = aws_sqs_queue.invoice_processing_queue.id
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.invoice_processing_dlq.arn
+    maxReceiveCount     = 3
+  })
+}
+
+# Permiso para que SQS pueda invocar database-writer
+resource "aws_lambda_permission" "sqs_invoke_database_writer" {
+  statement_id  = "AllowSQSInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = module.lambdas["database-writer"].lambda_function_name
+  principal     = "sqs.amazonaws.com"
+  source_arn    = aws_sqs_queue.invoice_processing_queue.arn
+}
+
+# Event Source Mapping: SQS invoca database-writer cuando hay mensajes en la cola
+resource "aws_lambda_event_source_mapping" "sqs_to_database_writer" {
+  event_source_arn = aws_sqs_queue.invoice_processing_queue.arn
+  function_name    = module.lambdas["database-writer"].lambda_function_arn
+  batch_size       = 1  # Procesar un mensaje a la vez
+  enabled          = true
+
+  depends_on = [
+    aws_lambda_permission.sqs_invoke_database_writer
+  ]
+}
+
 # Permiso para que S3 pueda invocar la Lambda
 resource "aws_lambda_permission" "s3_invoke_processor" {
   statement_id  = "AllowS3Invoke"
@@ -387,4 +445,19 @@ resource "null_resource" "upload_spa" {
 output "spa_url" {
   value       = "http://${module.s3_buckets["spa"].website_endpoint}"
   description = "URL pública de la SPA desplegada"
+}
+
+output "invoice_processing_queue_url" {
+  value       = aws_sqs_queue.invoice_processing_queue.id
+  description = "URL de la cola SQS para procesamiento de facturas"
+}
+
+output "invoice_processing_queue_arn" {
+  value       = aws_sqs_queue.invoice_processing_queue.arn
+  description = "ARN de la cola SQS para procesamiento de facturas"
+}
+
+output "invoice_processing_dlq_url" {
+  value       = aws_sqs_queue.invoice_processing_dlq.id
+  description = "URL de la Dead Letter Queue para facturas no procesadas"
 }
