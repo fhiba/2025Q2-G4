@@ -229,7 +229,7 @@ const Reports = () => {
                 onClick={() => navigate('/home')}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
               >
-                Volver a Home
+                Subir factura
               </button>
             </div>
           </div>
@@ -238,7 +238,7 @@ const Reports = () => {
 
       <div className="max-w-4xl mx-auto p-8">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Uploaded Invoices</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Mis facturas</h1>
           <button
             onClick={handleExportCSV}
             disabled={exporting || invoices.length === 0}
@@ -301,7 +301,7 @@ const Reports = () => {
                       onClick={() => handleToggleInvoice(invoice.file_key)}
                       className="p-2 text-gray-400"
                     >
-                      {expandedInvoice === invoice.file_key ? '▼' : '▶'}
+                      {expandedInvoice === invoice.file_key ? '' : ''}
                     </button>
                   </div>
                 </div>
