@@ -20,6 +20,14 @@ def handler(event, context):
         
         print(f"Received code: {code}")
         print(f"Received state: {state}")
+
+        if not code:
+            return {
+                'statusCode': 302,
+                'headers': {
+                    'Location': SPA_URL
+                }
+            }
         
         if not code:
             return {

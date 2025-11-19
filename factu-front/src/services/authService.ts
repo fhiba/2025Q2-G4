@@ -253,10 +253,12 @@ export class AuthService {
       
       // Redirect to Cognito logout
       const cognitoConfig = CONFIG.COGNITO;
+      const callbackEndpoint = CONFIG.COGNITO_CALLBACK_ENDPOINT;
+      const redirectUri = encodeURIComponent(callbackEndpoint);
       
       const logoutUrl = `https://${cognitoConfig.domain}/logout?` +
         `client_id=${cognitoConfig.userPoolWebClientId}&` +
-        `logout_uri=${encodeURIComponent(window.location.origin)}`;
+        `logout_uri=${redirectUri}`;
       
       window.location.href = logoutUrl;
     } catch (error) {

@@ -229,7 +229,7 @@ const Home = () => {
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-8 text-center">
-            Subir Facturas
+            Subir Factura
           </h1>
           {/* Botón para ir a Reports */}
           <div className="mb-8 text-center">
@@ -237,7 +237,7 @@ const Home = () => {
               onClick={handleGoToReports}
               className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
             >
-              Ver Reportes
+              Ver mis facturas
             </button>
           </div>
           <div className="max-w-2xl mx-auto">

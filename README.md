@@ -141,6 +141,9 @@ resource "aws_s3_bucket_versioning" "this" {
 
 ## Guía de Ejecución
 
+Asegurarse de tener Python 13 instalado en el sistema.
+
+Si estas en Windows 11 asegurarse de tener python3.13.exe en la system variables.
 
 ### Paso 0: Ingresar a la carpeta production
 
