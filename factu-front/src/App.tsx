@@ -252,7 +252,7 @@ const Home = () => {
               </p>
               <input
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
+                accept=".pdf"
                 onChange={handleFileChange}
                 className="hidden"
                 id="file-upload"
@@ -307,7 +307,7 @@ const Home = () => {
             {/* Supported Formats */}
             <div className="mt-8 text-center">
               <p className="text-sm text-gray-500">
-                Formatos soportados: PDF, JPG, PNG (máx. 10MB)
+                Formatos soportados: PDF(máx. 10MB)
               </p>
             </div>
           </div>
