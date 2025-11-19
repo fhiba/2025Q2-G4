@@ -244,7 +244,7 @@ const Reports = () => {
             disabled={exporting || invoices.length === 0}
             className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
-            {exporting ? 'Exporting...' : 'Export to CSV'}
+            {exporting ? 'Exportando...' : 'Exportar a CSV'}
           </button>
         </div>
 
