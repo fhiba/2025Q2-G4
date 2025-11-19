@@ -163,4 +163,42 @@ export class ApiService {
       throw error;
     }
   }
+
+  // Update invoice data in database (via invoice-data-updater lambda)
+  static async updateInvoice(
+    token: string,
+    fileKey: string,
+    updates: {
+      total?: string;
+      fecha?: string;
+      proveedor?: string;
+      cuit?: string;
+    }
+  ): Promise<any> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/invoices/update`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders(token),
+        body: JSON.stringify({
+          file_key: fileKey,
+          updates: updates
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      // Handle Lambda proxy response format
+      if (data.body) {
+        return JSON.parse(data.body);
+      }
+      return data;
+    } catch (error) {
+      console.error('Error updating invoice:', error);
+      throw error;
+    }
+  }
 }

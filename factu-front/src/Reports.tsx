@@ -23,6 +23,9 @@ const Reports = () => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null);
   const [invoiceData, setInvoiceData] = useState<{ [key: string]: ExtractedData }>({});
+  const [editingInvoice, setEditingInvoice] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState<{ [key: string]: ExtractedData }>({});
+  const [updating, setUpdating] = useState<{ [key: string]: boolean }>({});
   const [loadingData, setLoadingData] = useState<{ [key: string]: boolean }>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +102,112 @@ const Reports = () => {
     } finally {
       setExporting(false);
     }
+  };
+
+  // Start editing an invoice
+  const handleStartEdit = (fileKey: string) => {
+    setEditingInvoice(fileKey);
+    setEditFormData({
+      [fileKey]: { ...invoiceData[fileKey] }
+    });
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setEditingInvoice(null);
+    setEditFormData({});
+  };
+
+  // Save invoice updates
+  const handleSaveEdit = async (fileKey: string) => {
+    setUpdating(prev => ({ ...prev, [fileKey]: true }));
+    setError(null);
+    try {
+      const token = auth.getAccessToken();
+      if (!token) throw new Error('No auth token');
+
+      const updates: any = {};
+      const formData = editFormData[fileKey];
+      const currentData = invoiceData[fileKey] || {};
+      
+      // Normalizar valores para comparación (convertir null/undefined a string vacío)
+      const normalizeValue = (val: any) => val ?? '';
+      
+      // Comparar y agregar todos los campos que han cambiado o están presentes
+      if (formData?.total !== undefined) {
+        const newTotal = normalizeValue(formData.total);
+        const oldTotal = normalizeValue(currentData.total);
+        if (newTotal !== oldTotal) {
+          updates.total = formData.total || null;
+        }
+      }
+      if (formData?.fecha !== undefined) {
+        const newFecha = normalizeValue(formData.fecha);
+        const oldFecha = normalizeValue(currentData.fecha);
+        if (newFecha !== oldFecha) {
+          updates.fecha = formData.fecha || null;
+        }
+      }
+      if (formData?.proveedor !== undefined) {
+        const newProveedor = normalizeValue(formData.proveedor);
+        const oldProveedor = normalizeValue(currentData.proveedor);
+        if (newProveedor !== oldProveedor) {
+          updates.proveedor = formData.proveedor || null;
+        }
+      }
+      if (formData?.cuit !== undefined) {
+        const newCuit = normalizeValue(formData.cuit);
+        const oldCuit = normalizeValue(currentData.cuit);
+        if (newCuit !== oldCuit) {
+          updates.cuit = formData.cuit || null;
+        }
+      }
+
+      if (Object.keys(updates).length === 0) {
+        setEditingInvoice(null);
+        return;
+      }
+
+      const response = await ApiService.updateInvoice(token, fileKey, updates);
+      
+      // Update local state with the response
+      // La respuesta contiene updated_item con la estructura de DynamoDB
+      // Los datos están dentro de updated_item.data
+      if (response.updated_item) {
+        const updatedData = response.updated_item.data || {};
+        setInvoiceData(prev => ({
+          ...prev,
+          [fileKey]: {
+            total: updatedData.total ?? invoiceData[fileKey]?.total ?? null,
+            fecha: updatedData.fecha ?? invoiceData[fileKey]?.fecha ?? null,
+            cuit: updatedData.cuit ?? invoiceData[fileKey]?.cuit ?? null,
+            proveedor: updatedData.proveedor ?? invoiceData[fileKey]?.proveedor ?? null,
+            text_length: updatedData.text_length ?? invoiceData[fileKey]?.text_length ?? null,
+            file_size: updatedData.file_size ?? invoiceData[fileKey]?.file_size ?? null,
+          }
+        }));
+      }
+      
+      setEditingInvoice(null);
+      setEditFormData({});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update invoice');
+      console.error('Error updating invoice:', err);
+    } finally {
+      setUpdating(prev => ({ ...prev, [fileKey]: false }));
+    }
+  };
+
+  // Handle input change in edit form
+  const handleInputChange = (fileKey: string, field: keyof ExtractedData, value: string) => {
+    setEditFormData(prev => ({
+      ...prev,
+      [fileKey]: {
+        ...prev[fileKey],
+        ...invoiceData[fileKey],
+        [field]: value
+      }
+    }));
   };
 
   useEffect(() => {
@@ -201,31 +310,102 @@ const Reports = () => {
                   <div className="border-t border-gray-200 px-4 py-4 bg-gray-50">
                     {loadingData[invoice.file_key] ? (
                       <p className="text-gray-600">Loading data...</p>
+                    ) : editingInvoice === invoice.file_key ? (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-sm font-semibold text-gray-600 block mb-1">Total</label>
+                            <input
+                              type="text"
+                              value={editFormData[invoice.file_key]?.total || ''}
+                              onChange={(e) => handleInputChange(invoice.file_key, 'total', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              placeholder="Total"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-gray-600 block mb-1">Date</label>
+                            <input
+                              type="text"
+                              value={editFormData[invoice.file_key]?.fecha || ''}
+                              onChange={(e) => handleInputChange(invoice.file_key, 'fecha', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              placeholder="YYYY-MM-DD"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-gray-600 block mb-1">CUIT</label>
+                            <input
+                              type="text"
+                              value={editFormData[invoice.file_key]?.cuit || ''}
+                              onChange={(e) => handleInputChange(invoice.file_key, 'cuit', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              placeholder="CUIT"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-gray-600 block mb-1">Provider</label>
+                            <input
+                              type="text"
+                              value={editFormData[invoice.file_key]?.proveedor || ''}
+                              onChange={(e) => handleInputChange(invoice.file_key, 'proveedor', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              placeholder="Provider"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end space-x-2 pt-2">
+                          <button
+                            onClick={handleCancelEdit}
+                            disabled={updating[invoice.file_key]}
+                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed transition-colors"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            onClick={() => handleSaveEdit(invoice.file_key)}
+                            disabled={updating[invoice.file_key]}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed transition-colors"
+                          >
+                            {updating[invoice.file_key] ? 'Guardando...' : 'Guardar'}
+                          </button>
+                        </div>
+                      </div>
                     ) : (
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-600">Total</p>
-                          <p className="text-lg font-bold text-gray-900">
-                            {invoiceData[invoice.file_key]?.total || 'N/A'}
-                          </p>
+                      <div>
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-600">Total</p>
+                            <p className="text-lg font-bold text-gray-900">
+                              {invoiceData[invoice.file_key]?.total || 'N/A'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-gray-600">Date</p>
+                            <p className="text-lg font-bold text-gray-900">
+                              {invoiceData[invoice.file_key]?.fecha || 'N/A'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-gray-600">CUIT</p>
+                            <p className="text-lg font-bold text-gray-900">
+                              {invoiceData[invoice.file_key]?.cuit || 'N/A'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-gray-600">Provider</p>
+                            <p className="text-lg font-bold text-gray-900">
+                              {invoiceData[invoice.file_key]?.proveedor || 'N/A'}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-semibold text-gray-600">Date</p>
-                          <p className="text-lg font-bold text-gray-900">
-                            {invoiceData[invoice.file_key]?.fecha || 'N/A'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-gray-600">CUIT</p>
-                          <p className="text-lg font-bold text-gray-900">
-                            {invoiceData[invoice.file_key]?.cuit || 'N/A'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-gray-600">Provider</p>
-                          <p className="text-lg font-bold text-gray-900">
-                            {invoiceData[invoice.file_key]?.proveedor || 'N/A'}
-                          </p>
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => handleStartEdit(invoice.file_key)}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                          >
+                            ✏️ Editar
+                          </button>
                         </div>
                       </div>
                     )}

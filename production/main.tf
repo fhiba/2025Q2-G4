@@ -142,6 +142,9 @@ environment_variables = merge(
     each.key == "export" ? {
       TABLE_NAME = module.ddb_invoice_jobs.dynamodb_table_id
       INDEX_NAME = "GSI_User_Group"
+    } : {},
+    each.key == "invoice-data-updater" ? {
+      TABLE_NAME = module.ddb_invoice_jobs.dynamodb_table_id
     } : {}
 )
 
@@ -233,6 +236,11 @@ resource "aws_apigatewayv2_route" "routes" {
     }
     getter = {
       route_key          = "GET /invoices"
+      authorization_type = "JWT"
+      authorizer_id      = module.http_api.authorizers["cognito"].id
+    }
+    update_invoice = {
+      route_key          = "PUT /invoices/update"
       authorization_type = "JWT"
       authorizer_id      = module.http_api.authorizers["cognito"].id
     }
